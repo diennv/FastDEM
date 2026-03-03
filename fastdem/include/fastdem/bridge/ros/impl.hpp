@@ -173,102 +173,13 @@ PointCloud2T toPointCloud2Impl(const ElevationMap& map, const TimeT& stamp,
       map, stamp, elevation_layer, map.getStartIndex(), map.getSize());
 }
 
-// ── fillGridMapMsg ───────────────────────────────────────────────────────────
-//
-// Fills GridMap message geometry, layers, data, and start indices.
-// Does NOT set header (caller handles it — ROS1: msg.info.header, ROS2: msg.header).
-//
-template <typename GridMapMsgT, typename Float32MultiArrayT>
-void fillGridMapMsg(GridMapMsgT& msg, const ElevationMap& map) {
-  // Geometry
-  msg.info.resolution = map.getResolution();
-  msg.info.length_x = map.getLength().x();
-  msg.info.length_y = map.getLength().y();
-  msg.info.pose.position.x = map.getPosition().x();
-  msg.info.pose.position.y = map.getPosition().y();
-  msg.info.pose.position.z = 0.0;
-  msg.info.pose.orientation.w = 1.0;
-  msg.info.pose.orientation.x = 0.0;
-  msg.info.pose.orientation.y = 0.0;
-  msg.info.pose.orientation.z = 0.0;
-
-  // Layers (skip internal layers)
+/// Collect non-internal layer names from an ElevationMap.
+inline std::vector<std::string> visibleLayers(const ElevationMap& map) {
+  std::vector<std::string> layers;
   for (const auto& l : map.getLayers()) {
-    if (!layer::isInternal(l)) msg.layers.push_back(l);
+    if (!layer::isInternal(l)) layers.push_back(l);
   }
-  msg.basic_layers = {layer::elevation};
-
-  // Data
-  for (const auto& layer_name : msg.layers) {
-    Float32MultiArrayT data_array;
-
-    // Layout
-    data_array.layout.dim.resize(2);
-    data_array.layout.dim[0].label = "column_index";
-    data_array.layout.dim[0].size = map.getSize()(0);
-    data_array.layout.dim[0].stride = map.getSize()(0) * map.getSize()(1);
-    data_array.layout.dim[1].label = "row_index";
-    data_array.layout.dim[1].size = map.getSize()(1);
-    data_array.layout.dim[1].stride = map.getSize()(1);
-
-    // Copy data (Eigen column-major to row-major)
-    const auto& layer_data = map.get(layer_name);
-    data_array.data.resize(layer_data.size());
-
-    size_t idx = 0;
-    for (Eigen::Index col = 0; col < layer_data.cols(); ++col) {
-      for (Eigen::Index row = 0; row < layer_data.rows(); ++row) {
-        data_array.data[idx++] = layer_data(row, col);
-      }
-    }
-
-    msg.data.push_back(data_array);
-  }
-
-  // Circular buffer start indices
-  msg.outer_start_index = map.getStartIndex()(0);
-  msg.inner_start_index = map.getStartIndex()(1);
-}
-
-// ── toMarkerImpl ─────────────────────────────────────────────────────────────
-//
-// Creates a LINE_STRIP marker showing the map boundary rectangle.
-//
-template <typename MarkerT, typename PointT, typename TimeT>
-MarkerT toMarkerImpl(const ElevationMap& map, const TimeT& stamp) {
-  MarkerT marker;
-  marker.header.stamp = stamp;
-  marker.header.frame_id = map.getFrameId();
-  marker.ns = "fastdem";
-  marker.id = 0;
-  marker.type = MarkerT::LINE_STRIP;
-  marker.action = MarkerT::ADD;
-  marker.scale.x = 0.01;
-  marker.color.r = 1.0f;
-  marker.color.g = 1.0f;
-  marker.color.b = 1.0f;
-  marker.color.a = 1.0f;
-  marker.pose.orientation.w = 1.0;
-
-  const double cx = map.getPosition().x();
-  const double cy = map.getPosition().y();
-  const double hx = map.getLength().x() / 2.0;
-  const double hy = map.getLength().y() / 2.0;
-
-  PointT p;
-  p.z = 0.0;
-  const double corners[][2] = {{cx - hx, cy - hy},
-                                {cx + hx, cy - hy},
-                                {cx + hx, cy + hy},
-                                {cx - hx, cy + hy},
-                                {cx - hx, cy - hy}};
-  for (const auto& c : corners) {
-    p.x = c[0];
-    p.y = c[1];
-    marker.points.push_back(p);
-  }
-
-  return marker;
+  return layers;
 }
 
 }  // namespace fastdem::detail
