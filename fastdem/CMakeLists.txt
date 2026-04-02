@@ -114,10 +114,9 @@ endif()
 
 include(GNUInstallDirs)
 
-# Install library (stb is PRIVATE — excluded from export)
 if(nanoGrid_FOUND)
   # nanoGrid found on system — don't bundle it
-  install(TARGETS ${PROJECT_NAME} nanoPCL
+  install(TARGETS ${PROJECT_NAME} nanoPCL stb
     EXPORT ${PROJECT_NAME}Targets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -125,7 +124,7 @@ if(nanoGrid_FOUND)
   )
 else()
   # nanoGrid was FetchContent'd — bundle it
-  install(TARGETS ${PROJECT_NAME} nanoGrid nanoPCL
+  install(TARGETS ${PROJECT_NAME} nanoGrid nanoPCL stb
     EXPORT ${PROJECT_NAME}Targets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
