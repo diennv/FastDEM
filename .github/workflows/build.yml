@@ -14,6 +14,24 @@ jobs:
           make -j$(nproc)
           ctest --output-on-failure
 
+  core-system-nanogrid:
+    name: C++ Core (system nanoGrid)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get install -y libeigen3-dev libyaml-cpp-dev libspdlog-dev
+      - name: Install nanoGrid
+        run: |
+          git clone https://github.com/Ikhyeon-Cho/nanoGrid.git /tmp/nanoGrid
+          cd /tmp/nanoGrid && mkdir build && cd build
+          cmake .. && make -j$(nproc) && sudo make install
+      - name: Build and test FastDEM
+        run: |
+          cd fastdem && mkdir -p build && cd build
+          cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Release
+          make -j$(nproc)
+          ctest --output-on-failure
+
   ros1:
     name: ROS1 Noetic
     runs-on: ubuntu-latest

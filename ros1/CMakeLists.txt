@@ -21,9 +21,6 @@ find_package(catkin REQUIRED COMPONENTS
 # Pure CMake dependency (our core library)
 find_package(fastdem REQUIRED)
 
-# OpenMP (required by fastdem)
-find_package(OpenMP REQUIRED)
-
 ###############
 ## Catkin    ##
 ###############

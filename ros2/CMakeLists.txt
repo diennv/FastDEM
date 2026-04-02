@@ -27,12 +27,6 @@ find_package(visualization_msgs REQUIRED)
 # Pure CMake dependency (our core library)
 find_package(fastdem REQUIRED)
 
-# yaml-cpp (for config loading)
-find_package(yaml-cpp REQUIRED)
-
-# OpenMP (required by fastdem)
-find_package(OpenMP REQUIRED)
-
 ###########
 ## Build ##
 ###########
@@ -58,8 +52,6 @@ ament_target_dependencies(fastdem_node
 
 target_link_libraries(fastdem_node
   fastdem::fastdem
-  yaml-cpp
-  OpenMP::OpenMP_CXX
 )
 
 #############

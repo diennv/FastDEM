@@ -19,13 +19,16 @@ find_package(Eigen3 REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(spdlog REQUIRED)
 
-# External (FetchContent)
-include(FetchContent)
-FetchContent_Declare(nanoGrid
-  GIT_REPOSITORY https://github.com/Ikhyeon-Cho/nanoGrid.git
-  GIT_TAG main
-)
-FetchContent_MakeAvailable(nanoGrid)
+# External (find first, FetchContent as fallback)
+find_package(nanoGrid QUIET)
+if(NOT nanoGrid_FOUND)
+  include(FetchContent)
+  FetchContent_Declare(nanoGrid
+    GIT_REPOSITORY https://github.com/Ikhyeon-Cho/nanoGrid.git
+    GIT_TAG main
+  )
+  FetchContent_MakeAvailable(nanoGrid)
+endif()
 
 # Internal (Vendored)
 add_subdirectory(lib/nanoPCL)
@@ -111,13 +114,27 @@ endif()
 
 include(GNUInstallDirs)
 
-# Install library (internal targets included for linking)
-install(TARGETS ${PROJECT_NAME} nanoGrid nanoPCL stb
-  EXPORT ${PROJECT_NAME}Targets
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
+# Install library (stb is PRIVATE — excluded from export)
+if(nanoGrid_FOUND)
+  # nanoGrid found on system — don't bundle it
+  install(TARGETS ${PROJECT_NAME} nanoPCL
+    EXPORT ${PROJECT_NAME}Targets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+  )
+else()
+  # nanoGrid was FetchContent'd — bundle it
+  install(TARGETS ${PROJECT_NAME} nanoGrid nanoPCL
+    EXPORT ${PROJECT_NAME}Targets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+  )
+  install(DIRECTORY ${nanogrid_SOURCE_DIR}/include/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  )
+endif()
 
 # Install headers
 install(DIRECTORY include/
@@ -130,11 +147,6 @@ install(DIRECTORY lib/nanoPCL/include/
 
 install(DIRECTORY lib/nanoPCL/thirdparty/
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
-
-install(DIRECTORY lib/stb/
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/stb
-  FILES_MATCHING PATTERN "*.h"
 )
 
 # Install exported targets file
