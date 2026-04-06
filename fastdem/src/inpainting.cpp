@@ -32,7 +32,7 @@ void applyInpainting(ElevationMap& map, int max_iterations,
   if (!inplace) inpainted = map.get(layer::elevation);
 
   // 8-connected neighborhood (3x3 excluding center)
-  const auto reg8 = map.region(nanogrid::Size(3, 3));
+  const auto reg8 = map.kernel(nanogrid::Size(3, 3));
 
   const auto size = map.getSize();
   Eigen::MatrixXf buffer(size(0), size(1));

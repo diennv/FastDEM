@@ -36,13 +36,12 @@ inline sensor_msgs::PointCloud2 toPointCloud2(
     const ElevationMap& map, const nanogrid::Position& center,
     const nanogrid::Length& length,
     const char* elevation_layer = layer::elevation) {
-  bool ok = false;
-  nanogrid::SubmapGeometry geom(map, center, length, ok);
-  if (!ok) return {};
+  auto sub = map.subRegion(center, length);
+  if (!sub) return {};
   return fastdem::detail::toPointCloud2Impl<sensor_msgs::PointCloud2,
                                    sensor_msgs::PointField>(
       map, detail::toStamp(map.getTimestamp()), elevation_layer,
-      geom.getStartIndex(), geom.getSize());
+      sub->startIndex, sub->size);
 }
 
 /// Convert ElevationMap to grid_map_msgs::GridMap.

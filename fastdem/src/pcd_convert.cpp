@@ -18,6 +18,8 @@
 #include <limits>
 #include <vector>
 
+#include <fastdem/color.hpp>
+
 #include "fastdem/postprocess/inpainting.hpp"
 #include "nanopcl/filters/core.hpp"
 #include "nanopcl/filters/outlier_removal.hpp"
@@ -76,8 +78,9 @@ void fromPointCloud(const PointCloud& cloud, ElevationMap& map,
     const float z = pt.z();
     if (std::isnan(z)) continue;
 
-    nanogrid::Index index;
-    if (!map.getIndex(nanogrid::Position(pt.x(), pt.y()), index)) continue;
+    auto idxOpt = map.index(nanogrid::Position(pt.x(), pt.y()));
+    if (!idxOpt) continue;
+    nanogrid::Index index = *idxOpt;
 
     auto& stats = cells[index];
     stats.addZ(z);
@@ -91,11 +94,8 @@ void fromPointCloud(const PointCloud& cloud, ElevationMap& map,
     }
 
     if (has_color) {
-      auto color = cloud.color(i);
-      Eigen::Vector3i rgb(color.r, color.g, color.b);
-      float packed;
-      nanogrid::colorVectorToValue(rgb, packed);
-      stats.last_color_packed = packed;
+      auto c = cloud.color(i);
+      stats.last_color_packed = color::pack(c.r, c.g, c.b);
       stats.has_color = true;
     }
   }
@@ -236,8 +236,9 @@ PointCloud removeFloatingPoints(const PointCloud& cloud,
     auto pt = cloud.point(i);
     if (std::isnan(pt.z())) continue;
 
-    nanogrid::Index index;
-    if (!map.getIndex(nanogrid::Position(pt.x(), pt.y()), index)) continue;
+    auto idxOpt = map.index(nanogrid::Position(pt.x(), pt.y()));
+    if (!idxOpt) continue;
+    nanogrid::Index index = *idxOpt;
 
     cell_points[index].push_back(i);
   }
@@ -359,12 +360,10 @@ PointCloud toPointCloud(const ElevationMap& map) {
     if (has_color) {
       float packed = map.get(layer::color)(cell.index);
       if (!std::isnan(packed)) {
-        Eigen::Vector3i rgb;
-        nanogrid::colorValueToVector(packed, rgb);
+        uint8_t r, g, b;
+        color::unpack(packed, r, g, b);
         if (!cloud.hasColor()) cloud.useColor();
-        cloud.color(cloud.size() - 1) = {static_cast<uint8_t>(rgb(0)),
-                                          static_cast<uint8_t>(rgb(1)),
-                                          static_cast<uint8_t>(rgb(2))};
+        cloud.color(cloud.size() - 1) = {r, g, b};
       }
     }
   }

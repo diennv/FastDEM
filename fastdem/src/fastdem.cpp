@@ -205,9 +205,9 @@ PointCloud FastDEM::toPointCloud(
 
   size_t i = 0;
   for (const auto& [index, cell] : observations) {
-    nanogrid::Position pos;
-    map_.getPosition(index, pos);
-    cloud.point(i) = Eigen::Vector3f(pos.x(), pos.y(), cell.min_z);
+    auto pos = map_.position(index);
+    if (!pos) continue;
+    cloud.point(i) = Eigen::Vector3f(pos->x(), pos->y(), cell.min_z);
     ++i;
   }
   return cloud;

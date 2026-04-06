@@ -44,7 +44,7 @@ inline void applySpatialSmoothing(ElevationMap& map,
   const Eigen::MatrixXf input = map.get(layer_name);  // Copy (double buffer)
   auto& output = map.get(layer_name);                  // Reference (in-place)
 
-  const auto reg = map.region(nanogrid::Size(kernel_size, kernel_size));
+  const auto reg = map.kernel(nanogrid::Size(kernel_size, kernel_size));
 
   std::vector<float> window;
   window.reserve(kernel_size * kernel_size);

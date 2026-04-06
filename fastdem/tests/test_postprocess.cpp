@@ -30,9 +30,8 @@ class PostprocessTest : public ::testing::Test {
   }
 
   nanogrid::Index centerIndex() const {
-    nanogrid::Index idx;
-    map.getIndex(nanogrid::Position(0.0, 0.0), idx);
-    return idx;
+    auto idxOpt = map.index(nanogrid::Position(0.0, 0.0));
+    return *idxOpt;
   }
 };
 
@@ -91,8 +90,9 @@ TEST_F(PostprocessTest, RaycastingCreatesLayers) {
 
 TEST_F(PostprocessTest, RaycastingClearsGhostCell) {
   // Ghost cell at (2,0) with high elevation — no measurement reaches it
-  nanogrid::Index ghost_idx;
-  ASSERT_TRUE(map.getIndex(nanogrid::Position(2.0, 0.0), ghost_idx));
+  auto ghostOpt = map.index(nanogrid::Position(2.0, 0.0));
+  ASSERT_TRUE(ghostOpt.has_value());
+  nanogrid::Index ghost_idx = *ghostOpt;
   map.at(layer::elevation, ghost_idx) = 10.0f;
 
   // Ray from sensor (0,0,5) to target (4,0,0) passes through ghost cell
@@ -116,8 +116,9 @@ TEST_F(PostprocessTest, RaycastingClearsGhostCell) {
 
 TEST_F(PostprocessTest, RaycastingObservedCellProtected) {
   // Cell at (2,0) has elevation AND is directly measured this frame
-  nanogrid::Index cell_idx;
-  ASSERT_TRUE(map.getIndex(nanogrid::Position(2.0, 0.0), cell_idx));
+  auto cellOpt = map.index(nanogrid::Position(2.0, 0.0));
+  ASSERT_TRUE(cellOpt.has_value());
+  nanogrid::Index cell_idx = *cellOpt;
   map.at(layer::elevation, cell_idx) = 2.0f;
 
   // Target at (4,0,0): ray passes through (2,0) cell
@@ -145,8 +146,9 @@ TEST_F(PostprocessTest, RaycastingObservedCellProtected) {
 
 TEST_F(PostprocessTest, RaycastingGhostRequiresAccumulation) {
   // Ghost cell — logodds should decrease gradually over multiple frames
-  nanogrid::Index ghost_idx;
-  ASSERT_TRUE(map.getIndex(nanogrid::Position(2.0, 0.0), ghost_idx));
+  auto ghostOpt = map.index(nanogrid::Position(2.0, 0.0));
+  ASSERT_TRUE(ghostOpt.has_value());
+  nanogrid::Index ghost_idx = *ghostOpt;
   map.at(layer::elevation, ghost_idx) = 10.0f;
 
   PointCloud cloud;

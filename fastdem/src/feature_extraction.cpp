@@ -49,7 +49,7 @@ void applyFeatureExtraction(ElevationMap& map, float analysis_radius,
   auto& ny_mat = map.get(layer::normal_y);
   auto& nz_mat = map.get(layer::normal_z);
 
-  const auto reg = map.region(analysis_radius);
+  const auto reg = map.kernel(analysis_radius);
   const double res = map.getResolution();
 
   // Reusable buffer for percentile-based step computation

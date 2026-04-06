@@ -136,8 +136,8 @@ inline void ElevationMap::clearAt(const nanogrid::Index& index) {
 
 inline float ElevationMap::elevationAt(
     const nanogrid::Position& position) const {
-  if (!isInside(position)) return NAN;
-  return atPosition(layer::elevation, position);
+  auto val = get(layer::elevation, position);
+  return val.value_or(NAN);
 }
 
 inline float ElevationMap::elevationAt(const nanogrid::Index& index) const {

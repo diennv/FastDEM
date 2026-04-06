@@ -70,8 +70,9 @@ TEST_F(DualLayerTest, GroundObstacleSeparation) {
   auto cloud = makeCloud({{0, 0, 0.0f}, {0, 0, 3.0f}});
   mapping->update(cloud, robot_pos);
 
-  nanogrid::Index idx;
-  ASSERT_TRUE(map.getIndex(nanogrid::Position(0, 0), idx));
+  auto idxOpt = map.index(nanogrid::Position(0, 0));
+  ASSERT_TRUE(idxOpt.has_value());
+  nanogrid::Index idx = *idxOpt;
 
   // Ground should be near 0
   float h_g = map.at(layer::elevation, idx);
@@ -89,8 +90,9 @@ TEST_F(DualLayerTest, FlatSurfaceNoObstacle) {
   auto cloud = makeCloud({{0, 0, 1.0f}, {0, 0, 1.02f}});
   mapping->update(cloud, robot_pos);
 
-  nanogrid::Index idx;
-  ASSERT_TRUE(map.getIndex(nanogrid::Position(0, 0), idx));
+  auto idxOpt = map.index(nanogrid::Position(0, 0));
+  ASSERT_TRUE(idxOpt.has_value());
+  nanogrid::Index idx = *idxOpt;
 
   // Ground should be near 1.0
   EXPECT_NEAR(map.at(layer::elevation, idx), 1.0f, 0.1f);
@@ -111,8 +113,9 @@ TEST_F(DualLayerTest, SinglePointOnlyGround) {
   auto cloud = makeCloud({{0, 0, 2.0f}});
   mapping->update(cloud, robot_pos);
 
-  nanogrid::Index idx;
-  ASSERT_TRUE(map.getIndex(nanogrid::Position(0, 0), idx));
+  auto idxOpt = map.index(nanogrid::Position(0, 0));
+  ASSERT_TRUE(idxOpt.has_value());
+  nanogrid::Index idx = *idxOpt;
 
   EXPECT_NEAR(map.at(layer::elevation, idx), 2.0f, 0.1f);
   EXPECT_TRUE(std::isnan(map.at(layer::obstacle, idx)));
@@ -121,8 +124,9 @@ TEST_F(DualLayerTest, SinglePointOnlyGround) {
 TEST_F(DualLayerTest, KalmanWithDualLayer) {
   auto mapping = makeKalmanMapping();
 
-  nanogrid::Index idx;
-  ASSERT_TRUE(map.getIndex(nanogrid::Position(0, 0), idx));
+  auto idxOpt = map.index(nanogrid::Position(0, 0));
+  ASSERT_TRUE(idxOpt.has_value());
+  nanogrid::Index idx = *idxOpt;
 
   // Frame 1: floor=0, wall=3
   auto cloud1 = makeCloud({{0, 0, 0.0f}, {0, 0, 3.0f}});
@@ -145,8 +149,9 @@ TEST_F(DualLayerTest, KalmanWithDualLayer) {
 TEST_F(DualLayerTest, QuantileWithDualLayer) {
   auto mapping = makeQuantileMapping();
 
-  nanogrid::Index idx;
-  ASSERT_TRUE(map.getIndex(nanogrid::Position(0, 0), idx));
+  auto idxOpt = map.index(nanogrid::Position(0, 0));
+  ASSERT_TRUE(idxOpt.has_value());
+  nanogrid::Index idx = *idxOpt;
 
   // Feed multiple frames to build up P2 statistics
   for (int i = 0; i < 10; ++i) {
@@ -167,8 +172,9 @@ TEST_F(DualLayerTest, QuantileWithDualLayer) {
 TEST_F(DualLayerTest, ElevationMaxReflectsTrueMax) {
   auto mapping = makeKalmanMapping();
 
-  nanogrid::Index idx;
-  ASSERT_TRUE(map.getIndex(nanogrid::Position(0, 0), idx));
+  auto idxOpt = map.index(nanogrid::Position(0, 0));
+  ASSERT_TRUE(idxOpt.has_value());
+  nanogrid::Index idx = *idxOpt;
 
   // Frame 1: ground=0, wall=3
   auto cloud1 = makeCloud({{0, 0, 0.0f}, {0, 0, 3.0f}});
@@ -188,8 +194,9 @@ TEST_F(DualLayerTest, ElevationMaxReflectsTrueMax) {
 TEST_F(DualLayerTest, ObstacleClearsWhenFlat) {
   auto mapping = makeKalmanMapping();
 
-  nanogrid::Index idx;
-  ASSERT_TRUE(map.getIndex(nanogrid::Position(0, 0), idx));
+  auto idxOpt = map.index(nanogrid::Position(0, 0));
+  ASSERT_TRUE(idxOpt.has_value());
+  nanogrid::Index idx = *idxOpt;
 
   // Frame 1: wall present → obstacle = 2.0
   auto cloud1 = makeCloud({{0, 0, 0.0f}, {0, 0, 2.0f}});

@@ -111,10 +111,11 @@ void updatePointWise(nanogrid::GridMap& map, const PointCloud& cloud) {
   auto& count = map.get("count");
 
   for (const auto& point : cloud) {
-    nanogrid::Index idx;
-    if (!map.getIndex(nanogrid::Position(point.x(), point.y()), idx)) {
+    auto idxOpt = map.index(nanogrid::Position(point.x(), point.y()));
+    if (!idxOpt) {
       continue;
     }
+    nanogrid::Index idx = *idxOpt;
 
     float& elev = elevation(idx(0), idx(1));
     float& var = variance(idx(0), idx(1));
@@ -157,11 +158,11 @@ void updateCellFirstGrouping(nanogrid::GridMap& map, const PointCloud& cloud) {
   cell_points.reserve(cloud.size() / 4);  // Estimate ~4 points per cell
 
   for (const auto& point : cloud) {
-    nanogrid::Index idx;
-    if (!map.getIndex(nanogrid::Position(point.x(), point.y()), idx)) {
+    auto idxOpt = map.index(nanogrid::Position(point.x(), point.y()));
+    if (!idxOpt) {
       continue;
     }
-    cell_points[idx].push_back(point.z());
+    cell_points[*idxOpt].push_back(point.z());
   }
 
   // Phase 2: Update each cell with its grouped points
@@ -209,10 +210,11 @@ void updateBatchMean(nanogrid::GridMap& map, const PointCloud& cloud) {
 
   // Scatter-add phase
   for (const auto& point : cloud) {
-    nanogrid::Index idx;
-    if (!map.getIndex(nanogrid::Position(point.x(), point.y()), idx)) {
+    auto idxOpt = map.index(nanogrid::Position(point.x(), point.y()));
+    if (!idxOpt) {
       continue;
     }
+    nanogrid::Index idx = *idxOpt;
     sum(idx(0), idx(1)) += point.z();
     cnt(idx(0), idx(1)) += 1.0f;
   }
@@ -258,10 +260,11 @@ void updateBatchMeanPure(nanogrid::GridMap& map, const PointCloud& cloud) {
 
   // Scatter-add
   for (const auto& point : cloud) {
-    nanogrid::Index idx;
-    if (!map.getIndex(nanogrid::Position(point.x(), point.y()), idx)) {
+    auto idxOpt = map.index(nanogrid::Position(point.x(), point.y()));
+    if (!idxOpt) {
       continue;
     }
+    nanogrid::Index idx = *idxOpt;
     sum(idx(0), idx(1)) += point.z();
     cnt(idx(0), idx(1)) += 1.0f;
   }
@@ -293,10 +296,11 @@ void updateBatchWithVariance(nanogrid::GridMap& map, const PointCloud& cloud) {
 
   // Single pass: collect sum, sum_sq, count
   for (const auto& point : cloud) {
-    nanogrid::Index idx;
-    if (!map.getIndex(nanogrid::Position(point.x(), point.y()), idx)) {
+    auto idxOpt = map.index(nanogrid::Position(point.x(), point.y()));
+    if (!idxOpt) {
       continue;
     }
+    nanogrid::Index idx = *idxOpt;
     float z = point.z();
     sum(idx(0), idx(1)) += z;
     sum_sq(idx(0), idx(1)) += z * z;
@@ -371,10 +375,11 @@ void updateBatchVarianceEigen(nanogrid::GridMap& map, const PointCloud& cloud) {
 
   // Scatter phase
   for (const auto& point : cloud) {
-    nanogrid::Index idx;
-    if (!map.getIndex(nanogrid::Position(point.x(), point.y()), idx)) {
+    auto idxOpt = map.index(nanogrid::Position(point.x(), point.y()));
+    if (!idxOpt) {
       continue;
     }
+    nanogrid::Index idx = *idxOpt;
     float z = point.z();
     sum(idx(0), idx(1)) += z;
     sum_sq(idx(0), idx(1)) += z * z;
@@ -579,22 +584,22 @@ void runBenchmark(const PointCloud& cloud, const MapConfig& config) {
             << throughput_ev << " Mp/s" << std::setw(9) << speedup_ev << "x"
             << "\n";
 
-  // Reference: getIndex overhead
+  // Reference: index() overhead
   nanogrid::GridMap map_ref = createMap(config);
   size_t valid_count = 0;
   auto stats_getindex = benchmark::runVoid(
       [&]() {
         valid_count = 0;
         for (const auto& point : cloud) {
-          nanogrid::Index idx;
-          if (map_ref.getIndex(nanogrid::Position(point.x(), point.y()), idx)) {
+          auto idxOpt = map_ref.index(nanogrid::Position(point.x(), point.y()));
+          if (idxOpt) {
             ++valid_count;
           }
         }
       },
       benchmark::IterationPolicy::MEDIUM);
 
-  std::cout << std::left << std::setw(32) << "[REF] getIndex() only"
+  std::cout << std::left << std::setw(32) << "[REF] index() only"
             << std::right << std::fixed << std::setprecision(3) << std::setw(10)
             << stats_getindex.mean << " ± " << std::setw(5)
             << stats_getindex.ci_95() << std::setw(10) << "-" << std::setw(10)

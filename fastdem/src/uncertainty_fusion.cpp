@@ -116,7 +116,7 @@ void applyUncertaintyFusion(ElevationMap& map,
   auto& upper_mat = map.get(layer::upper_bound);
   auto& lower_mat = map.get(layer::lower_bound);
 
-  const auto reg = map.region(config.search_radius);
+  const auto reg = map.kernel(config.search_radius);
 
   // Pre-compute Gaussian constant for spatial weight
   const float inv_2sigma_spatial_sq =

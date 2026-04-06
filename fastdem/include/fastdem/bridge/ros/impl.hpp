@@ -6,7 +6,6 @@
 
 #include <fastdem/elevation_map.hpp>
 
-#include <nanogrid/SubmapGeometry.hpp>
 
 #include <cstring>
 #include <string>

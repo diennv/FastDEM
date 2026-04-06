@@ -3,6 +3,7 @@
 
 #include <gtest/gtest.h>
 
+#include "fastdem/color.hpp"
 #include "fastdem/io/pcd_convert.hpp"
 
 using namespace fastdem;
@@ -51,8 +52,9 @@ TEST(FromPointCloudTest, IntensityWrittenWhenLayerExists) {
 
   fromPointCloud(cloud, map);
 
-  nanogrid::Index index;
-  map.getIndex(nanogrid::Position(0.0, 0.0), index);
+  auto idxOpt = map.index(nanogrid::Position(0.0, 0.0));
+  ASSERT_TRUE(idxOpt.has_value());
+  nanogrid::Index index = *idxOpt;
   EXPECT_FLOAT_EQ(map.at(layer::intensity, index), 0.7f);
 }
 
@@ -113,17 +115,17 @@ TEST(FromPointCloudTest, ColorWrittenWhenLayerExists) {
 
   fromPointCloud(cloud, map);
 
-  nanogrid::Index index;
-  map.getIndex(nanogrid::Position(0.0, 0.0), index);
+  auto idxOpt = map.index(nanogrid::Position(0.0, 0.0));
+  ASSERT_TRUE(idxOpt.has_value());
+  nanogrid::Index index = *idxOpt;
   float packed = map.at(layer::color, index);
   EXPECT_FALSE(std::isnan(packed));
 
-  // colorValueToVector(float, Vector3f) returns [0, 1] range
-  Eigen::Vector3f rgb;
-  nanogrid::colorValueToVector(packed, rgb);
-  EXPECT_NEAR(rgb(0), 1.0f, 1.0f / 255.0f);           // R: 255
-  EXPECT_NEAR(rgb(1), 128.0f / 255.0f, 1.0f / 255.0f); // G: 128
-  EXPECT_NEAR(rgb(2), 64.0f / 255.0f, 1.0f / 255.0f);  // B: 64
+  uint8_t r, g, b;
+  fastdem::color::unpack(packed, r, g, b);
+  EXPECT_EQ(r, 255);
+  EXPECT_EQ(g, 128);
+  EXPECT_EQ(b, 64);
 }
 
 TEST(FromPointCloudTest, AutoSizedMapDimensions) {
@@ -165,8 +167,9 @@ TEST(FromPointCloudStatsTest, MinMaxCountCorrect) {
 
   fromPointCloud(cloud, map, RasterMethod::Max);
 
-  nanogrid::Index index;
-  ASSERT_TRUE(map.getIndex(nanogrid::Position(0.2, 0.2), index));
+  auto idxOpt = map.index(nanogrid::Position(0.2, 0.2));
+  ASSERT_TRUE(idxOpt.has_value());
+  nanogrid::Index index = *idxOpt;
 
   EXPECT_FLOAT_EQ(map.at(layer::elevation_min, index), 2.0f);
   EXPECT_FLOAT_EQ(map.at(layer::elevation_max, index), 6.0f);
@@ -184,8 +187,9 @@ TEST(FromPointCloudStatsTest, VarianceIsWelfordSampleVariance) {
 
   fromPointCloud(cloud, map, RasterMethod::Mean);
 
-  nanogrid::Index index;
-  ASSERT_TRUE(map.getIndex(nanogrid::Position(0.2, 0.2), index));
+  auto idxOpt = map.index(nanogrid::Position(0.2, 0.2));
+  ASSERT_TRUE(idxOpt.has_value());
+  nanogrid::Index index = *idxOpt;
 
   EXPECT_NEAR(map.at(layer::variance, index), 4.0f, 1e-5f);
 }
@@ -197,8 +201,9 @@ TEST(FromPointCloudStatsTest, SinglePointVarianceIsZero) {
 
   fromPointCloud(cloud, map);
 
-  nanogrid::Index index;
-  ASSERT_TRUE(map.getIndex(nanogrid::Position(0.0, 0.0), index));
+  auto idxOpt = map.index(nanogrid::Position(0.0, 0.0));
+  ASSERT_TRUE(idxOpt.has_value());
+  nanogrid::Index index = *idxOpt;
 
   EXPECT_FLOAT_EQ(map.at(layer::variance, index), 0.0f);
   EXPECT_FLOAT_EQ(map.at(layer::n_points, index), 1.0f);
@@ -213,8 +218,9 @@ TEST(FromPointCloudStatsTest, MinMethodWritesMinElevation) {
 
   fromPointCloud(cloud, map, RasterMethod::Min);
 
-  nanogrid::Index index;
-  ASSERT_TRUE(map.getIndex(nanogrid::Position(0.2, 0.2), index));
+  auto idxOpt = map.index(nanogrid::Position(0.2, 0.2));
+  ASSERT_TRUE(idxOpt.has_value());
+  nanogrid::Index index = *idxOpt;
 
   // elevation = min_z
   EXPECT_FLOAT_EQ(map.at(layer::elevation, index), 1.0f);
@@ -231,8 +237,9 @@ TEST(FromPointCloudStatsTest, MeanMethodWritesMeanElevation) {
 
   fromPointCloud(cloud, map, RasterMethod::Mean);
 
-  nanogrid::Index index;
-  ASSERT_TRUE(map.getIndex(nanogrid::Position(0.2, 0.2), index));
+  auto idxOpt = map.index(nanogrid::Position(0.2, 0.2));
+  ASSERT_TRUE(idxOpt.has_value());
+  nanogrid::Index index = *idxOpt;
 
   EXPECT_FLOAT_EQ(map.at(layer::elevation, index), 4.0f);
 }
@@ -259,8 +266,9 @@ TEST(FromPointCloudStatsTest, IntensityLayerAutoCreated) {
   fromPointCloud(cloud, map);
 
   EXPECT_TRUE(map.exists(layer::intensity));
-  nanogrid::Index index;
-  ASSERT_TRUE(map.getIndex(nanogrid::Position(0.0, 0.0), index));
+  auto idxOpt = map.index(nanogrid::Position(0.0, 0.0));
+  ASSERT_TRUE(idxOpt.has_value());
+  nanogrid::Index index = *idxOpt;
   EXPECT_FLOAT_EQ(map.at(layer::intensity, index), 0.7f);
 }
 
@@ -274,8 +282,9 @@ TEST(FromPointCloudStatsTest, NaNPointsSkipped) {
 
   fromPointCloud(cloud, map);
 
-  nanogrid::Index index;
-  ASSERT_TRUE(map.getIndex(nanogrid::Position(0.0, 0.0), index));
+  auto idxOpt = map.index(nanogrid::Position(0.0, 0.0));
+  ASSERT_TRUE(idxOpt.has_value());
+  nanogrid::Index index = *idxOpt;
 
   // Only the two non-NaN points should be counted
   EXPECT_FLOAT_EQ(map.at(layer::n_points, index), 2.0f);

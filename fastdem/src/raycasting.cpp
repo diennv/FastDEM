@@ -161,8 +161,8 @@ std::vector<nanogrid::Index> processScan(ElevationMap& map,
     const Eigen::Vector3f pt = scan.point(i);
 
     // Observed evidence: point inside map → cell is alive
-    nanogrid::Index idx;
-    if (map.getIndex(nanogrid::Position(pt.x(), pt.y()), idx)) {
+    if (auto idxOpt = map.index(nanogrid::Position(pt.x(), pt.y()))) {
+      nanogrid::Index idx = *idxOpt;
       float& logodds = logodds_mat(idx(0), idx(1));
       if (std::isnan(logodds)) logodds = 0.0f;
       logodds =

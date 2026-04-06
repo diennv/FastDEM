@@ -4,7 +4,7 @@
 #include "fastdem/mapping/elevation_mapping.hpp"
 
 #include <cmath>
-#include <nanogrid/GridMapMath.hpp>
+#include <fastdem/color.hpp>
 
 namespace fastdem {
 
@@ -51,8 +51,9 @@ ElevationMapping::CellObservations ElevationMapping::rasterize(
 
   for (size_t i : cloud.indices()) {
     auto pt = cloud.point(i);
-    nanogrid::Index index;
-    if (!map_.getIndex(nanogrid::Position(pt.x(), pt.y()), index)) continue;
+    auto idxOpt = map_.index(nanogrid::Position(pt.x(), pt.y()));
+    if (!idxOpt) continue;
+    nanogrid::Index index = *idxOpt;
 
     float pt_z_var = 0.0f;
     if (has_covariance) {
@@ -80,10 +81,7 @@ ElevationMapping::CellObservations ElevationMapping::rasterize(
 
     if (has_color) {
       auto color = cloud.color(i);
-      Eigen::Vector3i rgb(color.r, color.g, color.b);
-      float packed;
-      nanogrid::colorVectorToValue(rgb, packed);
-      cell.color_packed = packed;
+      cell.color_packed = color::pack(color.r, color.g, color.b);
       cell.has_color = true;
     }
   }
