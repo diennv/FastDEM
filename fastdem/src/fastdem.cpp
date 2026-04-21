@@ -10,6 +10,7 @@
 #include <nanopcl/filters/crop.hpp>
 #include <nanopcl/filters/downsample.hpp>
 
+#include "fastdem/mapping/grid_index_hash.hpp"
 #include "fastdem/postprocess/raycasting.hpp"
 
 namespace fastdem {
@@ -133,16 +134,27 @@ bool FastDEM::integrate(const PointCloud& cloud,
 bool FastDEM::integrateImpl(const PointCloud& cloud,
                             const Eigen::Isometry3d& T_base_sensor,
                             const Eigen::Isometry3d& T_world_base) {
+  auto _total = profiler_.scope("Total");
+
   // 1. Preprocess scan (covariance + transform + filter)
-  PointCloud points = preprocessScan(cloud, T_base_sensor, T_world_base);
+  PointCloud points;
+  {
+    auto _t = profiler_.scope("Scan Preprocess");
+    points = preprocessScan(cloud, T_base_sensor, T_world_base);
+  }
   if (points.empty()) return false;
   if (on_preprocessed_) {
     on_preprocessed_(points);
   }
 
   // 2. Map update (rasterize + estimate)
-  const Eigen::Vector2d robot_position = T_world_base.translation().head<2>();
-  auto obs = mapping_->update(points, robot_position);
+  ElevationMapping::CellObservations obs;
+  {
+    auto _t = profiler_.scope("Map Update");
+    const Eigen::Vector2d robot_position =
+        T_world_base.translation().head<2>();
+    obs = mapping_->update(points, robot_position);
+  }
 
   // 2.1 Build rasterized scan (one point per cell, z = min_z)
   if (on_rasterized_ && !obs.empty()) {
@@ -151,6 +163,7 @@ bool FastDEM::integrateImpl(const PointCloud& cloud,
 
   // 3. (Optional) Raycasting - dynamic object removal
   if (cfg_.raycasting.enabled) {
+    auto _t = profiler_.scope("Raycasting");
     const Eigen::Vector3f sensor_origin =
         (T_world_base * T_base_sensor).translation().cast<float>();
     auto ray_scan = nanopcl::filters::voxelGrid(
@@ -205,9 +218,9 @@ PointCloud FastDEM::toPointCloud(
 
   size_t i = 0;
   for (const auto& [index, cell] : observations) {
-    auto pos = map_.position(index);
-    if (!pos) continue;
-    cloud.point(i) = Eigen::Vector3f(pos->x(), pos->y(), cell.min_z);
+    grid_map::Position pos;
+    map_.getPosition(index, pos);
+    cloud.point(i) = Eigen::Vector3f(pos.x(), pos.y(), cell.min_z);
     ++i;
   }
   return cloud;

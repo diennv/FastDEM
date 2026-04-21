@@ -18,8 +18,7 @@
 #include <limits>
 #include <vector>
 
-#include <fastdem/color.hpp>
-
+#include "fastdem/mapping/grid_index_hash.hpp"
 #include "fastdem/postprocess/inpainting.hpp"
 #include "nanopcl/filters/core.hpp"
 #include "nanopcl/filters/outlier_removal.hpp"
@@ -78,9 +77,8 @@ void fromPointCloud(const PointCloud& cloud, ElevationMap& map,
     const float z = pt.z();
     if (std::isnan(z)) continue;
 
-    auto idxOpt = map.index(nanogrid::Position(pt.x(), pt.y()));
-    if (!idxOpt) continue;
-    nanogrid::Index index = *idxOpt;
+    grid_map::Index index;
+    if (!map.getIndex(grid_map::Position(pt.x(), pt.y()), index)) continue;
 
     auto& stats = cells[index];
     stats.addZ(z);
@@ -94,8 +92,11 @@ void fromPointCloud(const PointCloud& cloud, ElevationMap& map,
     }
 
     if (has_color) {
-      auto c = cloud.color(i);
-      stats.last_color_packed = color::pack(c.r, c.g, c.b);
+      auto color = cloud.color(i);
+      Eigen::Vector3i rgb(color.r, color.g, color.b);
+      float packed;
+      grid_map::colorVectorToValue(rgb, packed);
+      stats.last_color_packed = packed;
       stats.has_color = true;
     }
   }
@@ -178,7 +179,7 @@ ElevationMap fromPointCloud(const PointCloud& cloud, float resolution,
   ElevationMap map;
   map.setGeometry(width, height, resolution);
   map.setPosition(
-      nanogrid::Position((min_x + max_x) / 2.0, (min_y + max_y) / 2.0));
+      grid_map::Position((min_x + max_x) / 2.0, (min_y + max_y) / 2.0));
 
   fromPointCloud(cloud, map, method);
   return map;
@@ -236,9 +237,8 @@ PointCloud removeFloatingPoints(const PointCloud& cloud,
     auto pt = cloud.point(i);
     if (std::isnan(pt.z())) continue;
 
-    auto idxOpt = map.index(nanogrid::Position(pt.x(), pt.y()));
-    if (!idxOpt) continue;
-    nanogrid::Index index = *idxOpt;
+    grid_map::Index index;
+    if (!map.getIndex(grid_map::Position(pt.x(), pt.y()), index)) continue;
 
     cell_points[index].push_back(i);
   }
@@ -303,7 +303,7 @@ ElevationMap buildDEM(const PointCloud& cloud, const DEMConfig& config) {
   ElevationMap map;
   map.setGeometry(width, height, config.resolution);
   map.setPosition(
-      nanogrid::Position((min_x + max_x) / 2.0, (min_y + max_y) / 2.0));
+      grid_map::Position((min_x + max_x) / 2.0, (min_y + max_y) / 2.0));
 
   // 3. Per-cell histogram filter (floating point removal)
   float bin_size =
@@ -326,44 +326,45 @@ ElevationMap buildDEM(const PointCloud& cloud, const DEMConfig& config) {
 // ─── toPointCloud ───────────────────────────────────────────────────────
 
 PointCloud toPointCloud(const ElevationMap& map) {
+  const auto idx = map.indexer();
   const auto& elev_mat = map.get(layer::elevation);
 
   const bool has_intensity = map.exists(layer::intensity);
   const bool has_color = map.exists(layer::color);
 
-  const auto size = map.getSize();
-  const double res = map.getResolution();
-  const double origin_x =
-      map.getPosition().x() + map.getLength().x() / 2.0 - res / 2.0;
-  const double origin_y =
-      map.getPosition().y() + map.getLength().y() / 2.0 - res / 2.0;
-
   PointCloud cloud;
-  cloud.reserve(size(0) * size(1));
+  cloud.reserve(idx.rows * idx.cols);
 
-  for (auto cell : map.cells()) {
-    const float z = elev_mat(cell.index);
-    if (std::isnan(z)) continue;
+  for (int row = 0; row < idx.rows; ++row) {
+    for (int col = 0; col < idx.cols; ++col) {
+      auto [r, c] = idx(row, col);
+      const float z = elev_mat(r, c);
+      if (std::isnan(z)) continue;
 
-    const float x = static_cast<float>(origin_x - cell.row * res);
-    const float y = static_cast<float>(origin_y - cell.col * res);
-    cloud.add(x, y, z);
+      grid_map::Index grid_idx(r, c);
+      grid_map::Position pos;
+      if (!map.getPosition(grid_idx, pos)) continue;
 
-    if (has_intensity) {
-      float val = map.get(layer::intensity)(cell.index);
-      if (!std::isnan(val)) {
-        if (!cloud.hasIntensity()) cloud.useIntensity();
-        cloud.intensity(cloud.size() - 1) = val;
+      cloud.add(static_cast<float>(pos.x()), static_cast<float>(pos.y()), z);
+
+      if (has_intensity) {
+        float val = map.at(layer::intensity, grid_idx);
+        if (!std::isnan(val)) {
+          if (!cloud.hasIntensity()) cloud.useIntensity();
+          cloud.intensity(cloud.size() - 1) = val;
+        }
       }
-    }
 
-    if (has_color) {
-      float packed = map.get(layer::color)(cell.index);
-      if (!std::isnan(packed)) {
-        uint8_t r, g, b;
-        color::unpack(packed, r, g, b);
-        if (!cloud.hasColor()) cloud.useColor();
-        cloud.color(cloud.size() - 1) = {r, g, b};
+      if (has_color) {
+        float packed = map.at(layer::color, grid_idx);
+        if (!std::isnan(packed)) {
+          Eigen::Vector3i rgb;
+          grid_map::colorValueToVector(packed, rgb);
+          if (!cloud.hasColor()) cloud.useColor();
+          cloud.color(cloud.size() - 1) = {static_cast<uint8_t>(rgb(0)),
+                                            static_cast<uint8_t>(rgb(1)),
+                                            static_cast<uint8_t>(rgb(2))};
+        }
       }
     }
   }

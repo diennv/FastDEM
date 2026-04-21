@@ -4,7 +4,7 @@
 #include "fastdem/mapping/elevation_mapping.hpp"
 
 #include <cmath>
-#include <fastdem/color.hpp>
+#include <grid_map_core/GridMapMath.hpp>
 
 namespace fastdem {
 
@@ -51,9 +51,8 @@ ElevationMapping::CellObservations ElevationMapping::rasterize(
 
   for (size_t i : cloud.indices()) {
     auto pt = cloud.point(i);
-    auto idxOpt = map_.index(nanogrid::Position(pt.x(), pt.y()));
-    if (!idxOpt) continue;
-    nanogrid::Index index = *idxOpt;
+    grid_map::Index index;
+    if (!map_.getIndex(grid_map::Position(pt.x(), pt.y()), index)) continue;
 
     float pt_z_var = 0.0f;
     if (has_covariance) {
@@ -81,7 +80,10 @@ ElevationMapping::CellObservations ElevationMapping::rasterize(
 
     if (has_color) {
       auto color = cloud.color(i);
-      cell.color_packed = color::pack(color.r, color.g, color.b);
+      Eigen::Vector3i rgb(color.r, color.g, color.b);
+      float packed;
+      grid_map::colorVectorToValue(rgb, packed);
+      cell.color_packed = packed;
       cell.has_color = true;
     }
   }
@@ -108,7 +110,7 @@ void ElevationMapping::estimate(const CellObservations& observations) {
 ElevationMapping::CellObservations ElevationMapping::update(
     const PointCloud& cloud, const Eigen::Vector2d& robot_position) {
   if (cfg_.mode == MappingMode::LOCAL) {
-    map_.move(nanogrid::Position(robot_position.x(), robot_position.y()));
+    map_.move(grid_map::Position(robot_position.x(), robot_position.y()));
   }
 
   auto obs = rasterize(cloud);

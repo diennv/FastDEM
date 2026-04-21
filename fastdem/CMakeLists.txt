@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.10)
 project(fastdem VERSION 0.3.1)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -19,18 +19,8 @@ find_package(Eigen3 REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(spdlog REQUIRED)
 
-# External (find first, FetchContent as fallback)
-find_package(nanoGrid QUIET)
-if(NOT nanoGrid_FOUND)
-  include(FetchContent)
-  FetchContent_Declare(nanoGrid
-    GIT_REPOSITORY https://github.com/Ikhyeon-Cho/nanoGrid.git
-    GIT_TAG main
-  )
-  FetchContent_MakeAvailable(nanoGrid)
-endif()
-
 # Internal (Vendored)
+add_subdirectory(lib/grid_map_core)
 add_subdirectory(lib/nanoPCL)
 add_subdirectory(lib/stb)
 
@@ -56,7 +46,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 # Link libraries
 target_link_libraries(${PROJECT_NAME}
   PUBLIC
-    nanoGrid::nanoGrid
+    grid_map_core
     nanoPCL
     yaml-cpp
     spdlog::spdlog
@@ -71,10 +61,10 @@ target_link_libraries(${PROJECT_NAME}
 option(BUILD_BENCHMARKS "Build benchmark executables" OFF)
 
 if(BUILD_BENCHMARKS)
-  add_executable(benchmark_height_update
-    benchmarks/benchmark_height_update.cpp)
-  target_link_libraries(benchmark_height_update PRIVATE ${PROJECT_NAME})
-  target_compile_options(benchmark_height_update PRIVATE -O3)
+  add_executable(benchmark_postprocess_iteration
+    benchmarks/benchmark_postprocess_iteration.cpp)
+  target_link_libraries(benchmark_postprocess_iteration PRIVATE ${PROJECT_NAME})
+  target_compile_options(benchmark_postprocess_iteration PRIVATE -O3)
 endif()
 
 ##############
@@ -114,29 +104,21 @@ endif()
 
 include(GNUInstallDirs)
 
-if(nanoGrid_FOUND)
-  # nanoGrid found on system — don't bundle it
-  install(TARGETS ${PROJECT_NAME} nanoPCL stb
-    EXPORT ${PROJECT_NAME}Targets
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-  )
-else()
-  # nanoGrid was FetchContent'd — bundle it
-  install(TARGETS ${PROJECT_NAME} nanoGrid nanoPCL stb
-    EXPORT ${PROJECT_NAME}Targets
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-  )
-  install(DIRECTORY ${nanogrid_SOURCE_DIR}/include/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-  )
-endif()
+# Install library (internal targets included for linking)
+install(TARGETS ${PROJECT_NAME} grid_map_core nanoPCL stb
+  EXPORT ${PROJECT_NAME}Targets
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
 
 # Install headers
 install(DIRECTORY include/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+# Install vendored library headers
+install(DIRECTORY lib/grid_map_core/include/
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
@@ -146,6 +128,11 @@ install(DIRECTORY lib/nanoPCL/include/
 
 install(DIRECTORY lib/nanoPCL/thirdparty/
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+install(DIRECTORY lib/stb/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/stb
+  FILES_MATCHING PATTERN "*.h"
 )
 
 # Install exported targets file

@@ -28,20 +28,19 @@ TEST_F(ElevationMapTest, IsEmptyAfterSetGeometry) {
 }
 
 TEST_F(ElevationMapTest, ElevationAtOutOfBoundsPosition) {
-  nanogrid::Position far_away(100.0, 100.0);
+  grid_map::Position far_away(100.0, 100.0);
   EXPECT_TRUE(std::isnan(map.elevationAt(far_away)));
 }
 
 TEST_F(ElevationMapTest, HasElevationAtReturnsFalseForUnmeasured) {
-  nanogrid::Position center(0.0, 0.0);
+  grid_map::Position center(0.0, 0.0);
   EXPECT_FALSE(map.hasElevationAt(center));
 }
 
 TEST_F(ElevationMapTest, HasElevationAtReturnsTrueAfterWrite) {
-  nanogrid::Position pos(1.0, 1.0);
-  auto idxOpt = map.index(pos);
-  ASSERT_TRUE(idxOpt.has_value());
-  nanogrid::Index idx = *idxOpt;
+  grid_map::Position pos(1.0, 1.0);
+  grid_map::Index idx;
+  ASSERT_TRUE(map.getIndex(pos, idx));
 
   map.at(layer::elevation, idx) = 1.5f;
   EXPECT_TRUE(map.hasElevationAt(pos));
@@ -49,10 +48,9 @@ TEST_F(ElevationMapTest, HasElevationAtReturnsTrueAfterWrite) {
 }
 
 TEST_F(ElevationMapTest, ClearAtResetsToNaN) {
-  nanogrid::Position pos(1.0, 1.0);
-  auto idxOpt = map.index(pos);
-  ASSERT_TRUE(idxOpt.has_value());
-  nanogrid::Index idx = *idxOpt;
+  grid_map::Position pos(1.0, 1.0);
+  grid_map::Index idx;
+  ASSERT_TRUE(map.getIndex(pos, idx));
 
   map.at(layer::elevation, idx) = 2.0f;
   EXPECT_TRUE(map.hasElevationAt(pos));
@@ -63,10 +61,9 @@ TEST_F(ElevationMapTest, ClearAtResetsToNaN) {
 }
 
 TEST_F(ElevationMapTest, ElevationAtPositionInsideMap) {
-  nanogrid::Position center(0.0, 0.0);
-  auto idxOpt = map.index(center);
-  ASSERT_TRUE(idxOpt.has_value());
-  nanogrid::Index idx = *idxOpt;
+  grid_map::Position center(0.0, 0.0);
+  grid_map::Index idx;
+  ASSERT_TRUE(map.getIndex(center, idx));
 
   map.at(layer::elevation, idx) = 3.0f;
   EXPECT_TRUE(map.hasElevationAt(center));
@@ -81,10 +78,9 @@ TEST_F(ElevationMapTest, ParameterizedConstructor) {
 }
 
 TEST_F(ElevationMapTest, IsEmptyAtIndex) {
-  nanogrid::Position pos(2.0, 2.0);
-  auto idxOpt = map.index(pos);
-  ASSERT_TRUE(idxOpt.has_value());
-  nanogrid::Index idx = *idxOpt;
+  grid_map::Position pos(2.0, 2.0);
+  grid_map::Index idx;
+  ASSERT_TRUE(map.getIndex(pos, idx));
 
   EXPECT_TRUE(map.isEmptyAt(idx));
 
@@ -95,19 +91,17 @@ TEST_F(ElevationMapTest, IsEmptyAtIndex) {
 // ── Index-based API (requires basicLayers = {elevation}) ─────────────────────
 
 TEST_F(ElevationMapTest, HasElevationAtIndexFalseWhenUnmeasured) {
-  nanogrid::Position pos(1.0, 1.0);
-  auto idxOpt = map.index(pos);
-  ASSERT_TRUE(idxOpt.has_value());
-  nanogrid::Index idx = *idxOpt;
+  grid_map::Position pos(1.0, 1.0);
+  grid_map::Index idx;
+  ASSERT_TRUE(map.getIndex(pos, idx));
 
   EXPECT_FALSE(map.hasElevationAt(idx));
 }
 
 TEST_F(ElevationMapTest, HasElevationAtIndexTrueAfterWrite) {
-  nanogrid::Position pos(1.0, 1.0);
-  auto idxOpt = map.index(pos);
-  ASSERT_TRUE(idxOpt.has_value());
-  nanogrid::Index idx = *idxOpt;
+  grid_map::Position pos(1.0, 1.0);
+  grid_map::Index idx;
+  ASSERT_TRUE(map.getIndex(pos, idx));
 
   map.at(layer::elevation, idx) = 1.5f;
   EXPECT_TRUE(map.hasElevationAt(idx));
@@ -115,19 +109,17 @@ TEST_F(ElevationMapTest, HasElevationAtIndexTrueAfterWrite) {
 }
 
 TEST_F(ElevationMapTest, ElevationAtIndexReturnsNaNWhenUnmeasured) {
-  nanogrid::Position pos(0.0, 0.0);
-  auto idxOpt = map.index(pos);
-  ASSERT_TRUE(idxOpt.has_value());
-  nanogrid::Index idx = *idxOpt;
+  grid_map::Position pos(0.0, 0.0);
+  grid_map::Index idx;
+  ASSERT_TRUE(map.getIndex(pos, idx));
 
   EXPECT_TRUE(std::isnan(map.elevationAt(idx)));
 }
 
 TEST_F(ElevationMapTest, ClearAtResetsIndexBasedAccess) {
-  nanogrid::Position pos(1.0, 1.0);
-  auto idxOpt = map.index(pos);
-  ASSERT_TRUE(idxOpt.has_value());
-  nanogrid::Index idx = *idxOpt;
+  grid_map::Position pos(1.0, 1.0);
+  grid_map::Index idx;
+  ASSERT_TRUE(map.getIndex(pos, idx));
 
   map.at(layer::elevation, idx) = 2.0f;
   EXPECT_TRUE(map.hasElevationAt(idx));
@@ -139,10 +131,9 @@ TEST_F(ElevationMapTest, ClearAtResetsIndexBasedAccess) {
 
 TEST_F(ElevationMapTest, IsNotEmptyAfterSetGeometryOnWholeMap) {
   // Write to all cells, confirm isEmpty returns false
-  nanogrid::Position center(0.0, 0.0);
-  auto idxOpt = map.index(center);
-  ASSERT_TRUE(idxOpt.has_value());
-  nanogrid::Index idx = *idxOpt;
+  grid_map::Position center(0.0, 0.0);
+  grid_map::Index idx;
+  map.getIndex(center, idx);
   map.at(layer::elevation, idx) = 1.0f;
 
   EXPECT_FALSE(map.isEmpty());
@@ -150,10 +141,9 @@ TEST_F(ElevationMapTest, IsNotEmptyAfterSetGeometryOnWholeMap) {
 
 TEST_F(ElevationMapTest, DirectDataAccessWorks) {
   // Verify low-level at() always works for reading/writing
-  nanogrid::Position pos(-2.0, -2.0);
-  auto idxOpt = map.index(pos);
-  ASSERT_TRUE(idxOpt.has_value());
-  nanogrid::Index idx = *idxOpt;
+  grid_map::Position pos(-2.0, -2.0);
+  grid_map::Index idx;
+  ASSERT_TRUE(map.getIndex(pos, idx));
 
   EXPECT_TRUE(std::isnan(map.at(layer::elevation, idx)));
   map.at(layer::elevation, idx) = 42.0f;

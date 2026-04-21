@@ -43,26 +43,33 @@ inline void applySpatialSmoothing(ElevationMap& map,
 
   const Eigen::MatrixXf input = map.get(layer_name);  // Copy (double buffer)
   auto& output = map.get(layer_name);                  // Reference (in-place)
+  const int half = kernel_size / 2;
 
-  const auto reg = map.kernel(nanogrid::Size(kernel_size, kernel_size));
-
+  const auto idx = map.indexer();
   std::vector<float> window;
   window.reserve(kernel_size * kernel_size);
 
-  for (auto cell : map.cells()) {
-    if (!std::isfinite(input(cell.index))) continue;
+  for (int row = 0; row < idx.rows; ++row) {
+    for (int col = 0; col < idx.cols; ++col) {
+      auto [r, c] = idx(row, col);
+      if (!std::isfinite(input(r, c))) continue;
 
-    window.clear();
-    for (auto n : map.neighbors(cell, reg)) {
-      float val = input(n.index);
-      if (std::isfinite(val)) window.push_back(val);
+      window.clear();
+      for (int dr = -half; dr <= half; ++dr) {
+        for (int dc = -half; dc <= half; ++dc) {
+          if (!idx.contains(row + dr, col + dc)) continue;
+          auto [nr, nc] = idx(row + dr, col + dc);
+          float val = input(nr, nc);
+          if (std::isfinite(val)) window.push_back(val);
+        }
+      }
+
+      if (static_cast<int>(window.size()) < min_valid_neighbors) continue;
+
+      size_t mid = window.size() / 2;
+      std::nth_element(window.begin(), window.begin() + mid, window.end());
+      output(r, c) = window[mid];
     }
-
-    if (static_cast<int>(window.size()) < min_valid_neighbors) continue;
-
-    size_t mid = window.size() / 2;
-    std::nth_element(window.begin(), window.begin() + mid, window.end());
-    output(cell.index) = window[mid];
   }
 }
 

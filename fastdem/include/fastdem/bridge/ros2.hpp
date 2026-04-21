@@ -4,12 +4,13 @@
 #ifndef FASTDEM_BRIDGE_ROS2_HPP
 #define FASTDEM_BRIDGE_ROS2_HPP
 
+#include <grid_map_msgs/msg/grid_map.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
+#include <std_msgs/msg/float32_multi_array.hpp>
+#include <visualization_msgs/msg/marker.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
 #include <rclcpp/time.hpp>
-
-#include <nanogrid/bridge/ros2.hpp>
 
 #include <fastdem/bridge/ros/impl.hpp>
 #include <fastdem/bridge/ros/impl_visualization.hpp>
@@ -33,27 +34,33 @@ inline sensor_msgs::msg::PointCloud2 toPointCloud2(
 
 /// Convert a submap region to PointCloud2 (zero-copy from parent map).
 inline sensor_msgs::msg::PointCloud2 toPointCloud2(
-    const ElevationMap& map, const nanogrid::Position& center,
-    const nanogrid::Length& length,
+    const ElevationMap& map, const grid_map::Position& center,
+    const grid_map::Length& length,
     const char* elevation_layer = layer::elevation) {
-  auto sub = map.subRegion(center, length);
-  if (!sub) return {};
+  bool ok = false;
+  grid_map::SubmapGeometry geom(map, center, length, ok);
+  if (!ok) return {};
   return fastdem::detail::toPointCloud2Impl<sensor_msgs::msg::PointCloud2,
                                    sensor_msgs::msg::PointField>(
       map, detail::toStamp(map.getTimestamp()), elevation_layer,
-      sub->startIndex, sub->size);
+      geom.getStartIndex(), geom.getSize());
 }
 
 /// Convert ElevationMap to grid_map_msgs::msg::GridMap.
 inline grid_map_msgs::msg::GridMap toGridMap(const ElevationMap& map) {
-  auto msg = nanogrid::ros2::toMsg(map, fastdem::detail::visibleLayers(map));
-  msg.basic_layers = {layer::elevation};
+  grid_map_msgs::msg::GridMap msg;
+  msg.header.stamp = detail::toStamp(map.getTimestamp());
+  msg.header.frame_id = map.getFrameId();
+  fastdem::detail::fillGridMapMsg<grid_map_msgs::msg::GridMap,
+                         std_msgs::msg::Float32MultiArray>(msg, map);
   return msg;
 }
 
 /// Create map boundary marker for RViz visualization.
 inline visualization_msgs::msg::Marker toMapBoundary(const ElevationMap& map) {
-  return nanogrid::ros2::toBoundaryMarker(map);
+  return fastdem::detail::toMarkerImpl<visualization_msgs::msg::Marker,
+                              geometry_msgs::msg::Point>(
+      map, detail::toStamp(map.getTimestamp()));
 }
 
 /// Convert ElevationMap normal vectors to MarkerArray for RViz visualization.

@@ -29,9 +29,10 @@ class PostprocessTest : public ::testing::Test {
     map.setGeometry(10.0f, 10.0f, 0.5f);
   }
 
-  nanogrid::Index centerIndex() const {
-    auto idxOpt = map.index(nanogrid::Position(0.0, 0.0));
-    return *idxOpt;
+  grid_map::Index centerIndex() const {
+    grid_map::Index idx;
+    map.getIndex(grid_map::Position(0.0, 0.0), idx);
+    return idx;
   }
 };
 
@@ -43,7 +44,7 @@ TEST_F(PostprocessTest, InpaintingFillsSimpleHole) {
   constexpr int dx[] = {-1, 0, 1, -1, 1, -1, 0, 1};
   constexpr int dy[] = {-1, -1, -1, 0, 0, 1, 1, 1};
   for (int i = 0; i < 8; ++i) {
-    nanogrid::Index neighbor(center(0) + dy[i], center(1) + dx[i]);
+    grid_map::Index neighbor(center(0) + dy[i], center(1) + dx[i]);
     map.at(layer::elevation, neighbor) = 1.0f;
   }
   ASSERT_TRUE(std::isnan(map.at(layer::elevation, center)));
@@ -90,9 +91,8 @@ TEST_F(PostprocessTest, RaycastingCreatesLayers) {
 
 TEST_F(PostprocessTest, RaycastingClearsGhostCell) {
   // Ghost cell at (2,0) with high elevation — no measurement reaches it
-  auto ghostOpt = map.index(nanogrid::Position(2.0, 0.0));
-  ASSERT_TRUE(ghostOpt.has_value());
-  nanogrid::Index ghost_idx = *ghostOpt;
+  grid_map::Index ghost_idx;
+  ASSERT_TRUE(map.getIndex(grid_map::Position(2.0, 0.0), ghost_idx));
   map.at(layer::elevation, ghost_idx) = 10.0f;
 
   // Ray from sensor (0,0,5) to target (4,0,0) passes through ghost cell
@@ -116,9 +116,8 @@ TEST_F(PostprocessTest, RaycastingClearsGhostCell) {
 
 TEST_F(PostprocessTest, RaycastingObservedCellProtected) {
   // Cell at (2,0) has elevation AND is directly measured this frame
-  auto cellOpt = map.index(nanogrid::Position(2.0, 0.0));
-  ASSERT_TRUE(cellOpt.has_value());
-  nanogrid::Index cell_idx = *cellOpt;
+  grid_map::Index cell_idx;
+  ASSERT_TRUE(map.getIndex(grid_map::Position(2.0, 0.0), cell_idx));
   map.at(layer::elevation, cell_idx) = 2.0f;
 
   // Target at (4,0,0): ray passes through (2,0) cell
@@ -146,9 +145,8 @@ TEST_F(PostprocessTest, RaycastingObservedCellProtected) {
 
 TEST_F(PostprocessTest, RaycastingGhostRequiresAccumulation) {
   // Ghost cell — logodds should decrease gradually over multiple frames
-  auto ghostOpt = map.index(nanogrid::Position(2.0, 0.0));
-  ASSERT_TRUE(ghostOpt.has_value());
-  nanogrid::Index ghost_idx = *ghostOpt;
+  grid_map::Index ghost_idx;
+  ASSERT_TRUE(map.getIndex(grid_map::Position(2.0, 0.0), ghost_idx));
   map.at(layer::elevation, ghost_idx) = 10.0f;
 
   PointCloud cloud;
@@ -201,7 +199,7 @@ TEST_F(PostprocessTest, UncertaintyFusionComputesBounds) {
   // Fill a 3x3 block with valid bounds
   for (int dr = -1; dr <= 1; ++dr) {
     for (int dc = -1; dc <= 1; ++dc) {
-      nanogrid::Index idx(center(0) + dr, center(1) + dc);
+      grid_map::Index idx(center(0) + dr, center(1) + dc);
       float h = 1.0f + 0.1f * dr;
       map.at(layer::elevation, idx) = h;
       map.at(layer::upper_bound, idx) = h + 0.2f;
@@ -253,7 +251,7 @@ TEST_F(PostprocessTest, SpatialSmoothingRemovesSpike) {
   auto center = centerIndex();
   for (int dr = -2; dr <= 2; ++dr) {
     for (int dc = -2; dc <= 2; ++dc) {
-      nanogrid::Index idx(center(0) + dr, center(1) + dc);
+      grid_map::Index idx(center(0) + dr, center(1) + dc);
       map.at(layer::elevation, idx) = 1.0f;
     }
   }
@@ -305,10 +303,13 @@ TEST_F(PostprocessTest, FeatureExtractionFlatPlane) {
 
 TEST_F(PostprocessTest, FeatureExtractionTiltedPlane) {
   // Tilted plane: z increases with row → slope > 0
-  const float res = static_cast<float>(map.getResolution());
-  for (auto cell : map.cells()) {
-    map.get(layer::elevation)(cell.index) =
-        static_cast<float>(cell.row) * res * 0.5f;  // 0.5 rise/run
+  const auto idx = map.indexer();
+  for (int row = 0; row < idx.rows; ++row) {
+    for (int col = 0; col < idx.cols; ++col) {
+      auto [r, c] = idx(row, col);
+      map.at(layer::elevation, grid_map::Index(r, c)) =
+          static_cast<float>(row) * idx.resolution * 0.5f;  // 0.5 rise/run
+    }
   }
 
   applyFeatureExtraction(map, 0.6f, 4);
@@ -321,10 +322,13 @@ TEST_F(PostprocessTest, FeatureExtractionTiltedPlane) {
 
 TEST_F(PostprocessTest, FeatureExtractionStepDetection) {
   // Half the map at z=0, half at z=1 → step should be ~1.0 near boundary
-  const int half_cols = map.getSize()(1) / 2;
-  for (auto cell : map.cells()) {
-    map.get(layer::elevation)(cell.index) =
-        (cell.col < half_cols) ? 0.0f : 1.0f;
+  const auto idx = map.indexer();
+  for (int row = 0; row < idx.rows; ++row) {
+    for (int col = 0; col < idx.cols; ++col) {
+      auto [r, c] = idx(row, col);
+      map.at(layer::elevation, grid_map::Index(r, c)) =
+          (col < idx.cols / 2) ? 0.0f : 1.0f;
+    }
   }
 
   applyFeatureExtraction(map, 0.6f, 4);
@@ -363,10 +367,13 @@ TEST_F(PostprocessTest, FeatureExtractionInsufficientNeighbors) {
 
 TEST_F(PostprocessTest, FeatureExtractionNormalPointsUp) {
   // For any surface, normal_z should be positive (flipped upward)
-  const float res = static_cast<float>(map.getResolution());
-  for (auto cell : map.cells()) {
-    map.get(layer::elevation)(cell.index) =
-        static_cast<float>(cell.row) * res;
+  const auto idx = map.indexer();
+  for (int row = 0; row < idx.rows; ++row) {
+    for (int col = 0; col < idx.cols; ++col) {
+      auto [r, c] = idx(row, col);
+      map.at(layer::elevation, grid_map::Index(r, c)) =
+          static_cast<float>(row) * idx.resolution;
+    }
   }
 
   applyFeatureExtraction(map, 0.6f, 4);
