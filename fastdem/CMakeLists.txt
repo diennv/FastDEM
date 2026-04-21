@@ -65,6 +65,11 @@ if(BUILD_BENCHMARKS)
     benchmarks/benchmark_postprocess_iteration.cpp)
   target_link_libraries(benchmark_postprocess_iteration PRIVATE ${PROJECT_NAME})
   target_compile_options(benchmark_postprocess_iteration PRIVATE -O3)
+
+  add_executable(benchmark_estimator_comparison
+    benchmarks/benchmark_estimator_comparison.cpp)
+  target_link_libraries(benchmark_estimator_comparison PRIVATE ${PROJECT_NAME})
+  target_compile_options(benchmark_estimator_comparison PRIVATE -O3)
 endif()
 
 ##############
