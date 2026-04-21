@@ -12,7 +12,9 @@
 #include "fastdem/elevation_map.hpp"
 #include "fastdem/mapping/grid_index_hash.hpp"
 #include "fastdem/mapping/kalman_estimation.hpp"
+#include "fastdem/mapping/moving_average_estimation.hpp"
 #include "fastdem/mapping/quantile_estimation.hpp"
+#include "fastdem/mapping/stat_mean_estimation.hpp"
 #include "fastdem/point_types.hpp"
 
 namespace fastdem {
@@ -21,7 +23,7 @@ namespace fastdem {
 /// Updates map layers via temporal height estimation (Kalman or P² quantile).
 class ElevationMapping {
  public:
-  using HeightEstimator = std::variant<Kalman, P2Quantile>;
+  using HeightEstimator = std::variant<Kalman, P2Quantile, StatMean, MovingAverage>;
 
   /// Per-cell observation from a single scan.
   struct CellObservation {

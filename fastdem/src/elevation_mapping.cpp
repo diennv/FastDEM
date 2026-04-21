@@ -29,6 +29,14 @@ ElevationMapping::ElevationMapping(ElevationMap& map,
           Kalman{kf.min_variance, kf.max_variance, kf.process_noise};
       break;
     }
+    case EstimationType::StatMean: {
+      height_estimator_ = StatMean{};
+      break;
+    }
+    case EstimationType::MovingAverage: {
+      height_estimator_ = MovingAverage{cfg.moving_average.alpha};
+      break;
+    }
   }
 
   // Create estimator layers (once)

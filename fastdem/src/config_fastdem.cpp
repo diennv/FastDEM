@@ -33,6 +33,8 @@ void load(const YAML::Node& node, const std::string& key, T& value) {
 EstimationType parseEstimationType(const std::string& type) {
   if (type == "kalman_filter") return EstimationType::Kalman;
   if (type == "p2_quantile") return EstimationType::P2Quantile;
+  if (type == "stat_mean") return EstimationType::StatMean;
+  if (type == "moving_average") return EstimationType::MovingAverage;
   spdlog::warn("[Config] Unknown estimation type '{}', defaulting to kalman_filter",
                type);
   return EstimationType::Kalman;
@@ -80,6 +82,9 @@ Config parse(const YAML::Node& root) {
       load(p, "dn4", m.p2.dn4);
       load(p, "elevation_marker", m.p2.elevation_marker);
       load(p, "max_sample_count", m.p2.max_sample_count);
+    }
+    if (auto ma = n["moving_average"]) {
+      load(ma, "alpha", m.moving_average.alpha);
     }
   }
 
@@ -192,6 +197,8 @@ void validate(Config& cfg) {
         m.mapping.kalman.process_noise);
     m.mapping.kalman.process_noise = 0.0f;
   }
+  warn_clamp("mapping.moving_average.alpha", m.mapping.moving_average.alpha,
+             0.1f, 0.9f);
   warn_clamp("mapping.p2.elevation_marker", m.mapping.p2.elevation_marker,
              0, 4);
 

@@ -14,8 +14,10 @@ enum class MappingMode {
 
 /// Height estimation algorithm.
 enum class EstimationType {
-  Kalman,      ///< Recursive Bayesian (Kalman filter)
-  P2Quantile,  ///< Online quantile (P² algorithm)
+  Kalman,        ///< Recursive Bayesian (Kalman filter)
+  P2Quantile,    ///< Online quantile (P² algorithm)
+  StatMean,      ///< Welford online mean/variance
+  MovingAverage, ///< Exponential moving average
 };
 
 namespace config {
@@ -39,12 +41,18 @@ struct P2Quantile {
   float max_sample_count = 0.0f;  ///< Fading memory limit (0 = disabled)
 };
 
+/// MovingAverage estimator parameters.
+struct MovingAverage {
+  float alpha = 0.8f;  ///< EMA weight [0.1, 0.9]: higher = more weight to new measurement
+};
+
 /// Mapping configuration (consumed by ElevationMapping).
 struct Mapping {
   MappingMode mode = MappingMode::LOCAL;
   EstimationType estimation_type = EstimationType::Kalman;
   Kalman kalman;
   P2Quantile p2;
+  MovingAverage moving_average;
 };
 
 }  // namespace config
