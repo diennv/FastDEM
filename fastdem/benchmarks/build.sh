@@ -31,7 +31,7 @@ if [ -n "$BUILD_DIR" ]; then
     GRID_MAP_LIB="$BUILD_DIR/lib/grid_map_core/libgrid_map_core_hm.a"
 else
     # Probe common layouts: in-source build, parent build, colcon/catkin workspace build
-    WS_ROOT="$(cd "$SCRIPT_DIR/../../../../.." && pwd)"  # ~/stais_ws if src/FastDEM/fastdem/benchmarks
+    #WS_ROOT="$(cd "$SCRIPT_DIR/../../../../.." && pwd)"  # ~/stais_ws if src/FastDEM/fastdem/benchmarks
     for candidate in \
         "../build/lib/grid_map_core/libgrid_map_core_hm.a" \
         "../../build/lib/grid_map_core/libgrid_map_core_hm.a" \
@@ -43,6 +43,8 @@ else
         fi
     done
 fi
+
+GRID_MAP_LIB=../../../../build/fastdem/lib/grid_map_core/libgrid_map_core_hm.a
 
 if [ -z "$GRID_MAP_LIB" ] || [ ! -f "$GRID_MAP_LIB" ]; then
     echo "ERROR: libgrid_map_core_hm.a not found." >&2
