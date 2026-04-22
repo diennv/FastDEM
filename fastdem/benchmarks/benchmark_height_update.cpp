@@ -110,7 +110,7 @@ void updatePointWise(grid_map::GridMap& map, const PointCloud& cloud) {
   auto& variance = map.get("variance");
   auto& count = map.get("count");
 
-  for (const auto& point : cloud) {
+  for (const auto& point : cloud.points()) {
     grid_map::Index idx;
     if (!map.getIndex(grid_map::Position(point.x(), point.y()), idx)) {
       continue;
@@ -156,7 +156,7 @@ void updateCellFirstGrouping(grid_map::GridMap& map, const PointCloud& cloud) {
       cell_points;
   cell_points.reserve(cloud.size() / 4);  // Estimate ~4 points per cell
 
-  for (const auto& point : cloud) {
+  for (const auto& point : cloud.points()) {
     grid_map::Index idx;
     if (!map.getIndex(grid_map::Position(point.x(), point.y()), idx)) {
       continue;
@@ -208,7 +208,7 @@ void updateBatchMean(grid_map::GridMap& map, const PointCloud& cloud) {
   Eigen::MatrixXf cnt = Eigen::MatrixXf::Zero(rows, cols);
 
   // Scatter-add phase
-  for (const auto& point : cloud) {
+  for (const auto& point : cloud.points()) {
     grid_map::Index idx;
     if (!map.getIndex(grid_map::Position(point.x(), point.y()), idx)) {
       continue;
@@ -257,7 +257,7 @@ void updateBatchMeanPure(grid_map::GridMap& map, const PointCloud& cloud) {
   Eigen::MatrixXf cnt = Eigen::MatrixXf::Zero(rows, cols);
 
   // Scatter-add
-  for (const auto& point : cloud) {
+  for (const auto& point : cloud.points()) {
     grid_map::Index idx;
     if (!map.getIndex(grid_map::Position(point.x(), point.y()), idx)) {
       continue;
@@ -292,7 +292,7 @@ void updateBatchWithVariance(grid_map::GridMap& map, const PointCloud& cloud) {
   Eigen::MatrixXf cnt = Eigen::MatrixXf::Zero(rows, cols);
 
   // Single pass: collect sum, sum_sq, count
-  for (const auto& point : cloud) {
+  for (const auto& point : cloud.points()) {
     grid_map::Index idx;
     if (!map.getIndex(grid_map::Position(point.x(), point.y()), idx)) {
       continue;
@@ -370,7 +370,7 @@ void updateBatchVarianceEigen(grid_map::GridMap& map, const PointCloud& cloud) {
   Eigen::MatrixXf cnt = Eigen::MatrixXf::Zero(rows, cols);
 
   // Scatter phase
-  for (const auto& point : cloud) {
+  for (const auto& point : cloud.points()) {
     grid_map::Index idx;
     if (!map.getIndex(grid_map::Position(point.x(), point.y()), idx)) {
       continue;
@@ -585,7 +585,7 @@ void runBenchmark(const PointCloud& cloud, const MapConfig& config) {
   auto stats_getindex = benchmark::runVoid(
       [&]() {
         valid_count = 0;
-        for (const auto& point : cloud) {
+        for (const auto& point : cloud.points()) {
           grid_map::Index idx;
           if (map_ref.getIndex(grid_map::Position(point.x(), point.y()), idx)) {
             ++valid_count;
