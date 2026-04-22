@@ -24,19 +24,31 @@ INCLUDES=(
     "$EIGEN_CFLAGS"
 )
 
-# Locate the pre-built grid_map_core library (built via CMake as libgrid_map_core_hm)
+# Locate the pre-built grid_map_core library (built via CMake as libgrid_map_core_hm).
+# Override by setting BUILD_DIR in the environment.
 GRID_MAP_LIB=""
-for candidate in \
-    "../build/lib/grid_map_core/libgrid_map_core_hm.a" \
-    "../../build/lib/grid_map_core/libgrid_map_core_hm.a"; do
-    if [ -f "$candidate" ]; then
-        GRID_MAP_LIB="$candidate"
-        break
-    fi
-done
+if [ -n "$BUILD_DIR" ]; then
+    GRID_MAP_LIB="$BUILD_DIR/lib/grid_map_core/libgrid_map_core_hm.a"
+else
+    # Probe common layouts: in-source build, parent build, colcon/catkin workspace build
+    WS_ROOT="$(cd "$SCRIPT_DIR/../../../../.." && pwd)"  # ~/stais_ws if src/FastDEM/fastdem/benchmarks
+    for candidate in \
+        "../build/lib/grid_map_core/libgrid_map_core_hm.a" \
+        "../../build/lib/grid_map_core/libgrid_map_core_hm.a" \
+        "${WS_ROOT}/build/fastdem/lib/grid_map_core/libgrid_map_core_hm.a" \
+        "${WS_ROOT}/build/lib/grid_map_core/libgrid_map_core_hm.a"; do
+        if [ -f "$candidate" ]; then
+            GRID_MAP_LIB="$candidate"
+            break
+        fi
+    done
+fi
 
-if [ -z "$GRID_MAP_LIB" ]; then
-    echo "ERROR: libgrid_map_core_hm.a not found. Run cmake --build from the project root first." >&2
+if [ -z "$GRID_MAP_LIB" ] || [ ! -f "$GRID_MAP_LIB" ]; then
+    echo "ERROR: libgrid_map_core_hm.a not found." >&2
+    echo "  Build the project first (cmake --build / colcon build), then re-run." >&2
+    echo "  Or set BUILD_DIR to your CMake build directory and re-run:" >&2
+    echo "    BUILD_DIR=/path/to/build ./build.sh" >&2
     exit 1
 fi
 
