@@ -24,8 +24,23 @@ INCLUDES=(
     "$EIGEN_CFLAGS"
 )
 
-# Get grid_map flags
-GRID_MAP_FLAGS=$(pkg-config --cflags --libs grid_map_core 2>/dev/null || echo "-lgrid_map_core")
+# Locate the pre-built grid_map_core library (built via CMake as libgrid_map_core_hm)
+GRID_MAP_LIB=""
+for candidate in \
+    "../build/lib/grid_map_core/libgrid_map_core_hm.a" \
+    "../../build/lib/grid_map_core/libgrid_map_core_hm.a"; do
+    if [ -f "$candidate" ]; then
+        GRID_MAP_LIB="$candidate"
+        break
+    fi
+done
+
+if [ -z "$GRID_MAP_LIB" ]; then
+    echo "ERROR: libgrid_map_core_hm.a not found. Run cmake --build from the project root first." >&2
+    exit 1
+fi
+
+GRID_MAP_FLAGS="$GRID_MAP_LIB"
 
 # Build function
 build_benchmark() {
