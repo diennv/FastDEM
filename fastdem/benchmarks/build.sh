@@ -4,6 +4,9 @@
 # Usage:
 #   ./build.sh                    # Build all
 #   ./build.sh benchmark_height_update   # Build specific
+#
+# Set BUILD_DIR to override the CMake build directory search, e.g.:
+#   BUILD_DIR=/path/to/build ./build.sh
 
 set -e
 
@@ -24,55 +27,69 @@ INCLUDES=(
     "$EIGEN_CFLAGS"
 )
 
-# Locate the pre-built grid_map_core library (built via CMake as libgrid_map_core_hm).
-# Override by setting BUILD_DIR in the environment.
-GRID_MAP_LIB=""
-if [ -n "$BUILD_DIR" ]; then
-    GRID_MAP_LIB="$BUILD_DIR/lib/grid_map_core/libgrid_map_core_hm.a"
-else
-    # Probe common layouts: in-source build, parent build, colcon/catkin workspace build
-    #WS_ROOT="$(cd "$SCRIPT_DIR/../../../../.." && pwd)"  # ~/stais_ws if src/FastDEM/fastdem/benchmarks
-    for candidate in \
-        "../build/lib/grid_map_core/libgrid_map_core_hm.a" \
-        "../../build/lib/grid_map_core/libgrid_map_core_hm.a" \
-        "${WS_ROOT}/build/fastdem/lib/grid_map_core/libgrid_map_core_hm.a" \
-        "${WS_ROOT}/build/lib/grid_map_core/libgrid_map_core_hm.a"; do
+# Locate the CMake build directory.
+# Probes: in-source build, colcon workspace (src/FastDEM/fastdem/benchmarks -> build/fastdem)
+find_lib() {
+    local rel_path=$1
+    if [ -n "$BUILD_DIR" ]; then
+        echo "$BUILD_DIR/$rel_path"
+        return
+    fi
+    local candidates=(
+        "../build/$rel_path"
+        "../../build/$rel_path"
+        "../../../../build/fastdem/$rel_path"
+        "../../../build/$rel_path"
+    )
+    for candidate in "${candidates[@]}"; do
         if [ -f "$candidate" ]; then
-            GRID_MAP_LIB="$candidate"
-            break
+            echo "$candidate"
+            return
         fi
     done
-fi
+}
 
-GRID_MAP_LIB=../../../../build/fastdem/lib/grid_map_core/libgrid_map_core_hm.a
+GRID_MAP_LIB=$(find_lib "lib/grid_map_core/libgrid_map_core_hm.a")
+FASTDEM_LIB=$(find_lib "libfastdem.a")
 
+missing=0
 if [ -z "$GRID_MAP_LIB" ] || [ ! -f "$GRID_MAP_LIB" ]; then
     echo "ERROR: libgrid_map_core_hm.a not found." >&2
-    echo "  Build the project first (cmake --build / colcon build), then re-run." >&2
-    echo "  Or set BUILD_DIR to your CMake build directory and re-run:" >&2
+    missing=1
+fi
+if [ -z "$FASTDEM_LIB" ] || [ ! -f "$FASTDEM_LIB" ]; then
+    echo "ERROR: libfastdem.a not found." >&2
+    missing=1
+fi
+if [ "$missing" -eq 1 ]; then
+    echo "  Build the project first, then re-run:" >&2
+    echo "    cd ../.. && cmake -B build && cmake --build build" >&2
+    echo "  Or for a colcon workspace:" >&2
+    echo "    colcon build --packages-select fastdem" >&2
+    echo "  Or set BUILD_DIR explicitly:" >&2
     echo "    BUILD_DIR=/path/to/build ./build.sh" >&2
     exit 1
 fi
 
-GRID_MAP_FLAGS="$GRID_MAP_LIB"
+YAML_FLAGS=$(pkg-config --cflags --libs yaml-cpp 2>/dev/null || echo "-lyaml-cpp")
+SPDLOG_FLAGS=$(pkg-config --cflags --libs spdlog 2>/dev/null || echo "-lspdlog")
+
+LINK_FLAGS="$FASTDEM_LIB $GRID_MAP_LIB $YAML_FLAGS $SPDLOG_FLAGS"
 
 # Build function
 build_benchmark() {
     local name=$1
     echo "Building ${name}..."
-    $CXX $CXXFLAGS ${INCLUDES[@]} ${name}.cpp -o ${name} $GRID_MAP_FLAGS
+    $CXX $CXXFLAGS "${INCLUDES[@]}" "${name}.cpp" -o "${name}" $LINK_FLAGS
     echo "Built: ${name}"
 }
 
 # Main
 if [ $# -eq 0 ]; then
-    # Build all benchmarks
     for cpp in *.cpp; do
-        name="${cpp%.cpp}"
-        build_benchmark "$name"
+        build_benchmark "${cpp%.cpp}"
     done
 else
-    # Build specific benchmark
     build_benchmark "$1"
 fi
 
