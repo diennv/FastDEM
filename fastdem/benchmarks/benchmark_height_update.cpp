@@ -619,7 +619,7 @@ PointCloud subsample(const PointCloud& cloud, size_t target_size) {
   size_t step = cloud.size() / target_size;
   for (size_t i = 0; i < cloud.size() && result.size() < target_size;
        i += step) {
-    result.add(cloud[i]);
+    result.add(cloud[i].x(), cloud[i].y(), cloud[i].z());
   }
   return result;
 }
@@ -632,7 +632,7 @@ PointCloud replicate(const PointCloud& cloud, size_t target_size) {
 
   // Copy original
   for (size_t i = 0; i < cloud.size(); ++i) {
-    result.add(cloud[i]);
+    result.add(cloud[i].x(), cloud[i].y(), cloud[i].z());
   }
 
   // Add with small offset to simulate denser scan
@@ -642,8 +642,7 @@ PointCloud replicate(const PointCloud& cloud, size_t target_size) {
   while (result.size() < target_size) {
     size_t idx = result.size() % cloud.size();
     Point p = cloud[idx];
-    result.add(
-        Point(p.x() + offset(rng), p.y() + offset(rng), p.z() + offset(rng)));
+    result.add(p.x() + offset(rng), p.y() + offset(rng), p.z() + offset(rng));
   }
   return result;
 }
