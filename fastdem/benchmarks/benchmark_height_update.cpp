@@ -79,7 +79,7 @@
 #include <nanopcl/io.hpp>
 #include <unordered_map>
 
-#include "../lib/nanoPCL/benchmarks/benchmark_common.hpp"
+#include "../lib/nanoPCL/benchmarks/common/benchmark_common.hpp"
 #include "fastdem/mapping/grid_index_hash.hpp"
 
 using namespace npcl;

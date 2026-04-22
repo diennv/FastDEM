@@ -51,7 +51,7 @@
 
 #include <grid_map_core/grid_map_core.hpp>
 
-#include "../lib/nanoPCL/benchmarks/benchmark_common.hpp"
+#include "../lib/nanoPCL/benchmarks/common/benchmark_common.hpp"
 #include "fastdem/elevation_map.hpp"
 #include "fastdem/mapping/kalman_estimation.hpp"
 #include "fastdem/mapping/moving_average_estimation.hpp"
