@@ -641,7 +641,7 @@ PointCloud replicate(const PointCloud& cloud, size_t target_size) {
 
   while (result.size() < target_size) {
     size_t idx = result.size() % cloud.size();
-    Point p = cloud[idx];
+    Point p = cloud.point(idx);
     result.add(p.x() + offset(rng), p.y() + offset(rng), p.z() + offset(rng));
   }
   return result;
