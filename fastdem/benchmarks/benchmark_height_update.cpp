@@ -82,7 +82,7 @@
 #include "../lib/nanoPCL/benchmarks/common/benchmark_common.hpp"
 #include "fastdem/mapping/grid_index_hash.hpp"
 
-using namespace npcl;
+using namespace nanopcl;
 
 // -----------------------------------------------------------------------------
 // Configuration
