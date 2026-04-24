@@ -3,11 +3,12 @@
 
 // Estimator Comparison Benchmark
 //
-// Compares four height estimators across three dimensions:
+// Compares four height estimators across five dimensions:
 //   A. Timing Performance     - wall-clock cost per scan (vary obs count & resolution)
 //   B. Convergence Accuracy   - RMSE vs scan count under additive noise
 //   C. Dynamic Response       - recovery latency after a step height change
 //   D. Memory Footprint       - extra layers and bytes per cell per estimator
+//   E. Traversability Accuracy - obstacle classification quality (TPR, FPR, F1, boundary RMSE)
 //
 // Estimators:
 //   - Kalman        : 1D Kalman filter with Welford sample-variance side channel
@@ -19,8 +20,9 @@
 //   ASCII tables for all four sections.
 //
 // CSV outputs (current directory):
-//   convergence_rmse.csv   - per-scan RMSE for Section B (plot convergence curves)
-//   dynamic_response.csv   - per-scan RMSE for Section C (plot step response)
+//   convergence_rmse.csv        - per-scan RMSE for Section B (plot convergence curves)
+//   dynamic_response.csv        - per-scan RMSE for Section C (plot step response)
+//   traversability_accuracy.csv - per-scan TPR/FPR/F1/boundary-RMSE for Section E
 //
 // Build:
 //   cmake .. -DBUILD_BENCHMARKS=ON -DCMAKE_BUILD_TYPE=Release
@@ -102,19 +104,29 @@ constexpr float KALMAN_MAX_VAR = 0.1f;
 constexpr float KALMAN_PROCESS_NOISE = 0.0f;  // static terrain
 constexpr float EMA_ALPHA = 0.5f;             // balanced responsiveness
 
+// Traversability benchmark (Section E)
+// Terrain: ground at z=0 (x<0), step obstacle at z=STEP_HEIGHT (x>=0)
+constexpr float STEP_HEIGHT = 0.15f;         // [m] step height — obstacle for most wheeled robots
+constexpr float TRAV_THRESHOLD = 0.10f;      // [m] navigation obstacle threshold
+constexpr int   N_SCANS_TRAV = 50;           // scans per traversability trial
+const std::vector<int> TRAV_REPORT_SCANS = {1, 5, 10, 25, 50};
+constexpr float TRAV_BOUNDARY_WIDTH = 1.0f;  // [m] half-width around step edge for boundary RMSE
+constexpr float TRAV_NOISE_REP = 0.03f;      // representative noise for scan-by-scan tables
+
 }  // namespace cfg
 
 // =============================================================================
 // Terrain Types
 // =============================================================================
 
-enum class TerrainType { FLAT, SLOPE, SINUSOIDAL };
+enum class TerrainType { FLAT, SLOPE, SINUSOIDAL, STEP };
 
 float trueHeight(float x, float y, TerrainType type) {
   switch (type) {
-    case TerrainType::FLAT:      return 0.0f;
-    case TerrainType::SLOPE:     return 0.01f * x + 0.005f * y;
+    case TerrainType::FLAT:       return 0.0f;
+    case TerrainType::SLOPE:      return 0.01f * x + 0.005f * y;
     case TerrainType::SINUSOIDAL: return 0.3f * std::sin(x * 0.25f) * std::cos(y * 0.25f);
+    case TerrainType::STEP:       return (x >= 0.0f) ? cfg::STEP_HEIGHT : 0.0f;
   }
   return 0.0f;
 }
@@ -124,6 +136,7 @@ const char* terrainName(TerrainType t) {
     case TerrainType::FLAT:       return "Flat";
     case TerrainType::SLOPE:      return "Slope";
     case TerrainType::SINUSOIDAL: return "Sinusoidal";
+    case TerrainType::STEP:       return "Step";
   }
   return "?";
 }
@@ -219,6 +232,82 @@ double computeRMSEFlat(const ElevationMap& map, float target) {
     ++count;
   }
   return count > 0 ? std::sqrt(sum_sq / count) : std::numeric_limits<double>::quiet_NaN();
+}
+
+// =============================================================================
+// Traversability Metrics
+// =============================================================================
+
+struct TravMetrics {
+  float tpr;           // true positive rate (recall) — detected obstacles / all obstacles
+  float fpr;           // false positive rate — false alarms / all free cells
+  float precision;     // TP / (TP + FP)
+  float f1;            // harmonic mean of precision and recall
+  double boundary_rmse; // elevation RMSE within ±TRAV_BOUNDARY_WIDTH of the step edge
+};
+
+// Classify each cell and compute navigation-relevant metrics for a STEP terrain.
+// Cells with NaN elevation (e.g., P2Quantile before 5 measurements) are skipped.
+TravMetrics computeTravMetrics(const ElevationMap& map) {
+  int tp = 0, fp = 0, tn = 0, fn = 0;
+  double boundary_sq = 0.0;
+  int boundary_n = 0;
+
+  for (grid_map::GridMapIterator it(map); !it.isPastEnd(); ++it) {
+    float elev = map.elevationAt(*it);
+    if (!std::isfinite(elev)) continue;
+
+    grid_map::Position pos;
+    if (!map.getPosition(*it, pos)) continue;
+
+    const float gt = trueHeight(pos.x(), pos.y(), TerrainType::STEP);
+    const bool gt_obs   = (gt   >= cfg::TRAV_THRESHOLD);
+    const bool pred_obs = (elev >= cfg::TRAV_THRESHOLD);
+
+    if      ( gt_obs &&  pred_obs) ++tp;
+    else if (!gt_obs &&  pred_obs) ++fp;
+    else if (!gt_obs && !pred_obs) ++tn;
+    else                           ++fn;
+
+    if (std::abs(pos.x()) <= cfg::TRAV_BOUNDARY_WIDTH) {
+      double err = elev - gt;
+      boundary_sq += err * err;
+      ++boundary_n;
+    }
+  }
+
+  const int valid = tp + fp + tn + fn;
+  if (valid == 0) {
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    return {nan, nan, nan, nan, std::numeric_limits<double>::quiet_NaN()};
+  }
+
+  const float recall = (tp + fn > 0) ? static_cast<float>(tp) / (tp + fn) : 0.0f;
+  const float prec   = (tp + fp > 0) ? static_cast<float>(tp) / (tp + fp) : 0.0f;
+  const float f1     = (prec + recall > 0.0f) ? 2.0f * prec * recall / (prec + recall) : 0.0f;
+  const float fpr_   = (fp + tn > 0) ? static_cast<float>(fp) / (fp + tn) : 0.0f;
+  const double b_rmse = (boundary_n > 0)
+                            ? std::sqrt(boundary_sq / boundary_n)
+                            : std::numeric_limits<double>::quiet_NaN();
+
+  return {recall, fpr_, prec, f1, b_rmse};
+}
+
+template <typename E>
+std::vector<TravMetrics> runTravTrial(E est_proto, float sigma, std::mt19937& rng) {
+  ElevationMap map = makeSmallMap();
+  E est = est_proto;
+  est.ensureLayers(map);
+
+  std::vector<TravMetrics> per_scan;
+  per_scan.reserve(cfg::N_SCANS_TRAV);
+
+  for (int s = 0; s < cfg::N_SCANS_TRAV; ++s) {
+    auto obs = generateFullScan(map, TerrainType::STEP, sigma, rng);
+    applyObs(est, map, obs);
+    per_scan.push_back(computeTravMetrics(map));
+  }
+  return per_scan;
 }
 
 // =============================================================================
@@ -420,7 +509,7 @@ void runConvergenceSection() {
   std::vector<CurveSet> all_curves;
 
   const std::vector<TerrainType> terrains = {
-      TerrainType::FLAT, TerrainType::SINUSOIDAL};
+      TerrainType::FLAT, TerrainType::SLOPE, TerrainType::SINUSOIDAL};
 
   for (TerrainType terrain : terrains) {
     std::cout << "--- B: Terrain = " << terrainName(terrain) << " ---\n\n";
@@ -800,6 +889,142 @@ void runMemorySection() {
 }
 
 // =============================================================================
+// Section E: Traversability Accuracy
+// =============================================================================
+
+void runTraversabilitySection() {
+  std::cout << "\n";
+  std::cout << std::string(70, '=') << "\n";
+  std::cout << " Section E: Traversability Accuracy\n";
+  std::cout << std::string(70, '=') << "\n";
+  std::cout << "\nTerrain: half-map step obstacle\n";
+  std::cout << "  Ground  (x < 0): z = 0.00 m\n";
+  std::cout << "  Obstacle (x >= 0): z = " << cfg::STEP_HEIGHT << " m\n";
+  std::cout << "Navigation threshold: z >= " << cfg::TRAV_THRESHOLD
+            << " m → obstacle\n";
+  std::cout << "Boundary RMSE region: |x| <= " << cfg::TRAV_BOUNDARY_WIDTH << " m\n";
+  std::cout << "Note: P2Quantile outputs NaN for scans 1-4 (needs >= 5 obs/cell).\n\n";
+
+  struct TravCurve {
+    float sigma;
+    std::string name;
+    std::vector<TravMetrics> per_scan;
+  };
+  std::vector<TravCurve> all_curves;
+
+  auto addCurve = [&](float sigma, const std::string& name, auto est_proto) {
+    std::mt19937 rng(cfg::RNG_SEED);
+    all_curves.push_back({sigma, name, runTravTrial(est_proto, sigma, rng)});
+  };
+
+  for (float sigma : cfg::NOISE_LEVELS) {
+    addCurve(sigma, "Kalman",
+             Kalman(cfg::KALMAN_MIN_VAR, cfg::KALMAN_MAX_VAR, cfg::KALMAN_PROCESS_NOISE));
+    addCurve(sigma, "P2Quantile", P2Quantile());
+    addCurve(sigma, "StatMean",   StatMean());
+    addCurve(sigma, "MovingAvg",  MovingAverage(cfg::EMA_ALPHA));
+  }
+
+  // Helper: print a metric cell, using "-" for NaN
+  auto fmtPct = [](float v) -> std::string {
+    if (!std::isfinite(v)) return "-";
+    std::ostringstream s;
+    s << std::fixed << std::setprecision(1) << (v * 100.0f) << "%";
+    return s.str();
+  };
+  auto fmtF = [](double v, int prec = 4) -> std::string {
+    if (!std::isfinite(v)) return "-";
+    std::ostringstream s;
+    s << std::fixed << std::setprecision(prec) << v;
+    return s.str();
+  };
+
+  // --- Table E1: Final metrics per noise level (after N_SCANS_TRAV scans) ---
+  for (float sigma : cfg::NOISE_LEVELS) {
+    std::cout << "--- E1: Noise sigma=" << std::fixed << std::setprecision(2)
+              << sigma << "m  (after " << cfg::N_SCANS_TRAV << " scans) ---\n";
+    std::cout << std::left  << std::setw(16) << "Estimator"
+              << std::right << std::setw(10) << "TPR"
+              << std::right << std::setw(10) << "FPR"
+              << std::right << std::setw(12) << "Precision"
+              << std::right << std::setw(8)  << "F1"
+              << std::right << std::setw(15) << "BoundaryRMSE\n";
+    std::cout << std::string(71, '-') << "\n";
+
+    for (const auto& c : all_curves) {
+      if (c.sigma != sigma) continue;
+      const auto& m = c.per_scan.back();
+      std::cout << std::left  << std::setw(16) << c.name
+                << std::right << std::setw(10) << fmtPct(m.tpr)
+                << std::right << std::setw(10) << fmtPct(m.fpr)
+                << std::right << std::setw(12) << fmtF(m.precision)
+                << std::right << std::setw(8)  << fmtF(m.f1)
+                << std::right << std::setw(14) << fmtF(m.boundary_rmse) << "m\n";
+    }
+    std::cout << "\n";
+  }
+
+  // --- Table E2: F1 vs scan count (representative noise) ---
+  std::cout << "--- E2: F1 Score vs Scan Count  (sigma=" << std::fixed
+            << std::setprecision(2) << cfg::TRAV_NOISE_REP << "m) ---\n";
+  std::cout << std::left << std::setw(16) << "Estimator";
+  for (int s : cfg::TRAV_REPORT_SCANS)
+    std::cout << std::right << std::setw(10) << ("scan" + std::to_string(s));
+  std::cout << "\n" << std::string(16 + 10 * cfg::TRAV_REPORT_SCANS.size(), '-') << "\n";
+
+  for (const auto& c : all_curves) {
+    if (c.sigma != cfg::TRAV_NOISE_REP) continue;
+    std::cout << std::left << std::setw(16) << c.name;
+    for (int s : cfg::TRAV_REPORT_SCANS)
+      std::cout << std::right << std::setw(10) << fmtF(c.per_scan[s - 1].f1);
+    std::cout << "\n";
+  }
+  std::cout << "\n";
+
+  // --- Table E3: Boundary RMSE vs scan count (representative noise) ---
+  std::cout << "--- E3: Boundary RMSE vs Scan Count  (sigma=" << std::fixed
+            << std::setprecision(2) << cfg::TRAV_NOISE_REP << "m) ---\n";
+  std::cout << std::left << std::setw(16) << "Estimator";
+  for (int s : cfg::TRAV_REPORT_SCANS)
+    std::cout << std::right << std::setw(10) << ("scan" + std::to_string(s));
+  std::cout << "\n" << std::string(16 + 10 * cfg::TRAV_REPORT_SCANS.size(), '-') << "\n";
+
+  for (const auto& c : all_curves) {
+    if (c.sigma != cfg::TRAV_NOISE_REP) continue;
+    std::cout << std::left << std::setw(16) << c.name;
+    for (int s : cfg::TRAV_REPORT_SCANS)
+      std::cout << std::right << std::setw(10) << fmtF(c.per_scan[s - 1].boundary_rmse);
+    std::cout << "\n";
+  }
+  std::cout << "\n";
+
+  // --- Write CSV ---
+  std::ofstream csv("traversability_accuracy.csv");
+  if (csv.is_open()) {
+    csv << "sigma,estimator,scan,tpr,fpr,precision,f1,boundary_rmse\n";
+    for (const auto& c : all_curves) {
+      for (int i = 0; i < static_cast<int>(c.per_scan.size()); ++i) {
+        const auto& m = c.per_scan[i];
+        csv << std::fixed << std::setprecision(2) << c.sigma << ","
+            << c.name << "," << (i + 1) << ",";
+        auto csvF = [&](double v) {
+          if (std::isfinite(v)) csv << std::setprecision(6) << v;
+        };
+        csvF(m.tpr);      csv << ",";
+        csvF(m.fpr);      csv << ",";
+        csvF(m.precision); csv << ",";
+        csvF(m.f1);       csv << ",";
+        csvF(m.boundary_rmse);
+        csv << "\n";
+      }
+    }
+    std::cout << "Traversability curves written to: traversability_accuracy.csv\n";
+  }
+
+  std::cout << std::string(70, '-') << "\n";
+}
+
+// =============================================================================
 // Main
 // =============================================================================
 
@@ -809,18 +1034,19 @@ int main() {
   std::cout << " FastDEM Estimator Comparison Benchmark\n";
   std::cout << std::string(70, '=') << "\n";
   std::cout << "Estimators: Kalman | P2Quantile | StatMean | MovingAverage\n";
-  std::cout << "Sections:   A=Timing  B=Convergence  C=Dynamic  D=Memory\n";
+  std::cout << "Sections:   A=Timing  B=Convergence  C=Dynamic  D=Memory  E=Traversability\n";
   std::cout << std::string(70, '=') << "\n";
 
   runTimingSection();
   runConvergenceSection();
   runDynamicSection();
   runMemorySection();
+  runTraversabilitySection();
 
   std::cout << "\n";
   std::cout << std::string(70, '=') << "\n";
   std::cout << " Done.\n";
-  std::cout << "CSV outputs: convergence_rmse.csv, dynamic_response.csv\n";
+  std::cout << "CSV outputs: convergence_rmse.csv, dynamic_response.csv, traversability_accuracy.csv\n";
   std::cout << std::string(70, '=') << "\n\n";
 
   return 0;
