@@ -119,12 +119,12 @@ def fig1_convergence(csv="convergence_rmse.csv", rep_sigma=0.03):
             s = STYLE[est]
             data = sub[sub["estimator"] == est].sort_values("scan")
             # Convert RMSE from m → cm for readability
-            ax.plot(data["scan"], data["rmse"] * 100,
+            ax.plot(data["scan"].to_numpy(), (data["rmse"] * 100).to_numpy(),
                     color=s["color"], ls=s["ls"], lw=s["lw"])
 
         ax.set_title(terrain)
         ax.set_xlabel("Scan count")
-        ax.set_xlim(1, df_long["scan"].max())
+        ax.set_xlim(1, int(df_long["scan"].max()))
         ax.set_ylim(bottom=0)
         ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.1f"))
 
@@ -166,8 +166,8 @@ def fig2_dynamic(csv="dynamic_response.csv"):
         if est not in STYLE:
             continue
         s = STYLE[est]
-        vals = pd.to_numeric(df[col], errors="coerce") * 100  # → cm
-        ax.plot(df["scan"], vals,
+        vals = (pd.to_numeric(df[col], errors="coerce") * 100).to_numpy()  # → cm
+        ax.plot(df["scan"].to_numpy(), vals,
                 color=s["color"], ls=s["ls"], lw=s["lw"], label=s["label"])
 
     ymax = ax.get_ylim()[1]
@@ -209,14 +209,14 @@ def fig3_f1_vs_scan(csv="traversability_accuracy.csv", rep_sigma=0.03):
     for est in ORDER:
         s = STYLE[est]
         data = sub[sub["estimator"] == est].sort_values("scan")
-        ax.plot(data["scan"], data["f1"],
+        ax.plot(data["scan"].to_numpy(), data["f1"].to_numpy(),
                 color=s["color"], ls=s["ls"], lw=s["lw"])
 
     ax.axhline(0.95, color="gray", ls=":", lw=1.2, label="F1 = 0.95")
 
     ax.set_xlabel("Scan count")
     ax.set_ylabel("F1 Score")
-    ax.set_xlim(1, sub["scan"].max())
+    ax.set_xlim(1, int(sub["scan"].max()))
     ax.set_ylim(0, 1.05)
 
     handles = _legend_handles()
@@ -304,12 +304,12 @@ def fig5_boundary_rmse(csv="traversability_accuracy.csv", rep_sigma=0.03):
     for est in ORDER:
         s = STYLE[est]
         data = sub[sub["estimator"] == est].sort_values("scan")
-        ax.plot(data["scan"], data["boundary_rmse"] * 100,  # → cm
+        ax.plot(data["scan"].to_numpy(), (data["boundary_rmse"] * 100).to_numpy(),
                 color=s["color"], ls=s["ls"], lw=s["lw"])
 
     ax.set_xlabel("Scan count")
     ax.set_ylabel("Boundary RMSE [cm]")
-    ax.set_xlim(1, sub["scan"].max())
+    ax.set_xlim(1, int(sub["scan"].max()))
     ax.set_ylim(bottom=0)
 
     ax.legend(handles=_legend_handles(), loc="upper right", frameon=True)
